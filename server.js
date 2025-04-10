@@ -196,7 +196,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
         multiplePaymentElements = true;
       }
       const header_attributes = Object.assign({}, results_headers.find((item) => item.orderId == result_payment.orderId));
-      if ((result_payment.paymentStatus == "SUCCESS") || (result_payment.paymentStatus == "STARTED" && header_attributes.status == "PAYMENT_PROCESSING")) {
+      if ((result_payment.paymentStatus == "SUCCESS") || (result_payment.paymentStatus == "STARTED")) {
 
         try {
           const basket_attributes = Object.assign({}, results_baskets.find((item) => item.orderId == result_payment.orderId));
@@ -232,7 +232,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
               moneticoAmount = monetico_attributes.amount;
               moneticoStatus = monetico_attributes.moneticoStatus;
               moneticoTPE = monetico_attributes.tpe;
-              moneticoReference = allMoneticoResultsFound.map(result=>result.reference).join("---");
+              moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
             } else {
               moneticoImmediateCheck = "Monetico Not Found";
               moneticoStatus = "Monetico Not Found";
