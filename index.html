@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razoon Tool -Extraction des transactions Sytral</title>
+</head>
+
+<body>
+    <h1>Extraction des transactions Sytral</h1>
+    <form action="/uploadcsv" method="post" enctype="multipart/form-data">
+        <h3>CSV Header (,)</h3>
+        <input type="file" name="file_header" id="file_header" accept=".csv">
+        <h3>CSV Basket (,)</h3>
+        <input type="file" name="file_basket" id="file_basket" accept=".csv">
+        <h3>CSV Payment (,)</h3>
+        <input type="file" name="file_payment" id="file_payment" accept=".csv">
+        <h3>CSV Product (,)</h3>
+        <input type="file" name="file_product" id="file_product" accept=".csv">
+        <h3>CSV Monetico (;)</h3>
+        <input type="file" name="file_monetico" id="file_monetico" accept=".csv">
+        <h3>CSV Conduent (;)</h3>
+        <input type="file" name="file_conduent" id="file_conduent" accept=".csv">
+        <h3>Commandes</h3>
+        <input type="text" name="orderId" id="orderId">
+        <h3>Date</h3>
+        <input type="text" name="paymentDate" id="paymentDate">
+        <h3>Quels fichiers générer</h3>
+        <div>
+            <input type="checkbox" id="complete" name="complete" checked />
+            <label for="complete">Transactions complètes</label>
+        </div>
+        <div>
+            <input type="checkbox" id="callbackko" name="callbackko" checked />
+            <label for="callbackko">Callbacks KO</label>
+        </div>
+        <br />
+        <br />
+        <br />
+        <button type="submit">Soumettre</button>
+    </form>
+</body>
+<script>
+    const inputDate = document.getElementById('paymentDate');
+    const todayDate = new Date();
+    const year = todayDate.getFullYear();
+    const month = todayDate.getMonth() + 1 > 9 ? todayDate.getMonth() + 1 : "0" + (todayDate.getMonth() + 1);
+    const date = todayDate.getDate() > 9 ? todayDate.getDate() : "0" + todayDate.getDate();
+    inputDate.value = year + '-' + month + '-' + date;
+</script>
+
+</html>
