@@ -43,8 +43,7 @@
             "Nouveau Cas 6",
             "Nouveau Cas 7",
             "Nouveau Cas 8",
-            "Nouveau Cas 9",
-            "Nouveau Cas 10"
+            "Nouveau Cas 9"
         ],
         "orderedAttributes": [
             "orderId",
@@ -89,24 +88,29 @@
             "newCase6",
             "newCase7",
             "newCase8",
-            "newCase9",
-            "newCase10"
+            "newCase9"
         ]
-    }, 
+    },
     "callbackKO": {
         "headers_labels": [
             "IS-Commande",
             "IS-Statut commande",
             "IS-Reference paiement",
             "Monetico-Statut",
-            "Date"
+            "Date",
+            "Callback non recue",
+            "Callback non recue et panier reouvert",
+            "Callback recue"
         ],
         "orderedAttributes": [
             "orderId",
             "status",
             "ref",
             "moneticoStatus",
-            "date"
+            "date",
+            "callbackNotReceived",
+            "otherCases",
+            "validationError"
         ]
     }
 }

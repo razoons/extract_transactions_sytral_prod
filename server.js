@@ -165,6 +165,8 @@ async function process_conduent(conduentFile, results_conduent) {
   })
 }
 
+const moneticoPaidStatuses = ['PA', 'AU', 'PP'];
+
 function build_extract(results_payments, results_headers, results_baskets, results_products, results_monetico, results_conduent, completeFileToProcess, callbackKOFileToProcess) {
 
   let zipFile = [
@@ -196,7 +198,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
         multiplePaymentElements = true;
       }
       const header_attributes = Object.assign({}, results_headers.find((item) => item.orderId == result_payment.orderId));
-      if ((result_payment.paymentStatus == "SUCCESS") || (result_payment.paymentStatus == "STARTED")) {
+      if (result_payment.paymentStatus == "SUCCESS") {
 
         try {
           const basket_attributes = Object.assign({}, results_baskets.find((item) => item.orderId == result_payment.orderId));
@@ -225,7 +227,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
             moneticoTPE = monetico_attributes.tpe;
             moneticoReference = monetico_attributes.reference
           } else {
-            const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
+            const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && moneticoPaidStatuses.includes(item.moneticoStatus));
             if (allMoneticoResultsFound.length > 0) {
               const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
               moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
@@ -338,13 +340,12 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       newCase1: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
       newCase2: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'Autre') ? true : false,
       newCase3: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus == 'Conduent Not Found') ? true : false,
-      newCase4: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentStatus != 'ANN' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-      newCase5: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentTotalCheck == false) ? true : false,
-      newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
-      newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-      newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
-      newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-      newCase10: (transaction.status == "PAYMENT_PROCESSING" && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'EN' && transaction.moneticoStatus != 'RE') ? true : false,
+      newCase4: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentStatus != 'ANN' && transaction.status == 'VALIDATION_ERROR') ? true : false,
+      newCase5: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentTotalCheck == false) ? true : false,
+      newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
+      newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
+      newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
+      newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
     }));
 
     fs.writeFileSync(path.join(__dirname, zipFile[0]), build_internal(transactionsWithCase));
@@ -353,7 +354,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
   if (callbackKOFileToProcess) {
     console.log('Début de la construction du fichier des callbacks KO');
     let moneticoTransactions = [];
-    results_monetico.shift();
+    results_monetico.shift(); //suppression des headers
 
     let percentStep = 2;
     let count = 1;
@@ -372,7 +373,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
         console.log("Réalisé: " + checkPoints[findCheckPoint].percent + "%");
         checkPoints.splice(findCheckPoint, 1);
       }
-      if (result_monetico.moneticoStatus != "RE" && result_monetico.moneticoStatus != "EN") {
+      if (moneticoPaidStatuses.includes(result_monetico.moneticoStatus)) {
         const findSeparatorforRef = result_monetico.reference.indexOf("$");
         const truncatedPaymentRef = findSeparatorforRef != -1 ? result_monetico.reference.substring(0, findSeparatorforRef) : result_monetico.reference;
         const foundHeader = results_headers.find((item) => item.orderId == truncatedPaymentRef);
@@ -381,16 +382,21 @@ function build_extract(results_payments, results_headers, results_baskets, resul
         const date = result_monetico.date;
         if (foundHeader) {
           const { orderId, status } = foundHeader;
-          if (status == "PAYMENT_PROCESSING") {
+          if (!["FINALIZED", "VALIDATED", "UNKNOWN"].includes(status)) {
             moneticoTransactions.push({ orderId, status, ref, moneticoStatus, date });
           }
-        } else {
-          moneticoTransactions.push({ 'orderId': 'NULL', 'status': 'NULL', ref, moneticoStatus, date });
         }
       }
     })
 
-    fs.writeFileSync(path.join(__dirname, zipFile[1]), build_callbackKO(moneticoTransactions));
+    const moneticoTransactionsWithCase = moneticoTransactions.map(transaction => ({
+      ...transaction,
+      callbackNotReceived: (transaction.status == "PAYMENT_PROCESSING") ? true : false,
+      validationError: (transaction.status == "VALIDATION_ERROR") ? true : false,
+      otherCases: (transaction.status !== "VALIDATION_ERROR" && transaction.status !== "PAYMENT_PROCESSING") ? true : false,
+    }));
+
+    fs.writeFileSync(path.join(__dirname, zipFile[1]), build_callbackKO(moneticoTransactionsWithCase));
   }
 
   return zipFile
