@@ -196,7 +196,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
         multiplePaymentElements = true;
       }
       const header_attributes = Object.assign({}, results_headers.find((item) => item.orderId == result_payment.orderId));
-      if ((result_payment.paymentStatus == "SUCCESS") || (result_payment.paymentStatus == "STARTED")) {
+      if ((result_payment.paymentStatus == "SUCCESS")) {
 
         try {
           const basket_attributes = Object.assign({}, results_baskets.find((item) => item.orderId == result_payment.orderId));
@@ -343,8 +343,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
       newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
       newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'RE' && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
-      newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-      newCase10: (transaction.status == "PAYMENT_PROCESSING" && transaction.moneticoStatus != 'Monetico Not Found' && transaction.moneticoStatus != 'EN' && transaction.moneticoStatus != 'RE') ? true : false,
+      newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false
     }));
 
     fs.writeFileSync(path.join(__dirname, zipFile[0]), build_internal(transactionsWithCase));
