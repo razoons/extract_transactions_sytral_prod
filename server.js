@@ -346,7 +346,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false
     }));
 
-    fs.writeFileSync(path.join(__dirname, zipFile[0]), build_internal(transactionsWithCase));
+    fs.writeFileSync(path.join(__dirname,'outputs', zipFile[0]), build_internal(transactionsWithCase));
   }
 
   if (callbackKOFileToProcess) {
@@ -389,7 +389,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       }
     })
 
-    fs.writeFileSync(path.join(__dirname, zipFile[1]), build_callbackKO(moneticoTransactions));
+    fs.writeFileSync(path.join(__dirname,'outputs', zipFile[1]), build_callbackKO(moneticoTransactions));
   }
 
   return zipFile
