@@ -25,7 +25,8 @@
         <h3>Commandes</h3>
         <input type="text" name="orderId" id="orderId">
         <h3>Date</h3>
-        <input type="text" name="paymentDate" id="paymentDate">
+        <label for="startPaymentDate">Début</label><input type="text" name="startPaymentDate" id="startPaymentDate">
+        <label for="endPaymentDate">Fin</label><input type="text" name="endPaymentDate" id="endPaymentDate">
         <h3>Quels fichiers générer</h3>
         <div>
             <input type="checkbox" id="complete" name="complete" checked />
@@ -42,7 +43,7 @@
     </form>
 </body>
 <script>
-    const inputDate = document.getElementById('paymentDate');
+    const inputDate = document.getElementById('endPaymentDate');
     const todayDate = new Date();
     const year = todayDate.getFullYear();
     const month = todayDate.getMonth() + 1 > 9 ? todayDate.getMonth() + 1 : "0" + (todayDate.getMonth() + 1);

@@ -43,7 +43,8 @@
             "Nouveau Cas 6",
             "Nouveau Cas 7",
             "Nouveau Cas 8",
-            "Nouveau Cas 9"
+            "Nouveau Cas 9",
+            "Nouveau Cas 10"
         ],
         "orderedAttributes": [
             "orderId",
@@ -88,7 +89,8 @@
             "newCase6",
             "newCase7",
             "newCase8",
-            "newCase9"
+            "newCase9",
+            "newCase10"
         ]
     }, 
     "callbackKO": {

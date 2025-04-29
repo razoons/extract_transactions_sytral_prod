@@ -24,21 +24,21 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-const results_headers = [];
-const results_baskets = [];
-const results_payments = [];
-const results_products = [];
-const results_monetico = [];
-const results_conduent = [];
+let results_headers = [];
+let results_baskets = [];
+let results_payments = [];
+let results_products = [];
+let results_monetico = [];
+let results_conduent = [];
 let requested_payments = [];
 let requested_results_monetico = [];
-const checkPointMap = new Map();
-const headerMap = new Map();
-const basketMap = new Map();
-const moneticoMap = new Map();
-const conduentRefMap = new Map();
-const conduentIDGCCMap = new Map();
-const successResultsPayments = [];
+let checkPointMap;
+let headerMap;
+let basketMap;
+let moneticoMap;
+let conduentRefMap;
+let conduentIDGCCMap;
+let successResultsPayments = [];
 
 async function process_headers(headerFile) {
   return new Promise((resolve, reject) => {
@@ -182,205 +182,210 @@ async function process_conduent(conduentFile) {
 }
 
 function build_extract(requested_results_payments, results_headers, results_baskets, results_products, results_monetico, requested_results_monetico, results_conduent, completeFileToProcess, callbackKOFileToProcess) {
-
-  let zipFile = [
-    'transactions_completes.csv',
-    'transactions_callbackKO.csv'
-  ];
-  let moneticoPaidStatuses = ['PA'];
-  if (completeFileToProcess) {
-    console.log('Début de la construction du fichier des transactions complètes');
-    let transactions = [];
-    let percentStep = 2;
-    let count = 1;
-    let checkPoints = [];
-    let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus) && item.tpe == "7630196");
-    console.log(remainingMoneticoTransactions.length);
-    while (count * percentStep < 100) {
-      let index = Math.floor(count * percentStep * requested_results_payments.length / 100);
-      checkPoints.push({ percent: count * percentStep, orderId: requested_results_payments[index].orderId });
-      count++;
-    }
-
-    checkPointMap = checkPoints.map((item) => [item.orderId, item.percent]);
-    headerMap = results_headers.map((item) => [item.orderId, item]);
-    basketMap = results_baskets.map((item) => [item.orderId, item]);
-    moneticoMap = results_monetico.map((item) => [item.reference, item]);
-    conduentRefMap = results_conduent.map((item) => [item.truncatedReference, item]);
-    conduentIDGCCMap = results_conduent.map((item) => [item.IDGCC + item.userCode, item]);
-
-    successResultsPayments = requested_results_payments.filter((item) => item.paymentStatus == "SUCCESS");
-
-
-    const multiplePaymentMap = successResultsPayments.reduce((accumulator, payment) => {
-      accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
-      return accumulator;
-    }, new Map());
-
-    const multipleTentativePaymentMap = requested_results_payments.reduce((accumulator, payment) => {
-      accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
-      return accumulator;
-    }, new Map());
-
-
-
-    successResultsPayments.forEach(function (result_payment) {
-      const findCheckPoint = checkPointMap.get(result_payment.orderId);
-      if (findCheckPoint != undefined) {
-        console.log("Réalisé: " + findCheckPoint + "%");
+  try {
+    let zipFile = [
+      'transactions_completes.csv',
+      'transactions_callbackKO.csv'
+    ];
+    let moneticoPaidStatuses = ['PA'];
+    if (completeFileToProcess) {
+      console.log('Début de la construction du fichier des transactions complètes');
+      let transactions = [];
+      let percentStep = 2;
+      let count = 1;
+      let checkPoints = [];
+      let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus) && item.tpe == "7630196");
+      console.log(remainingMoneticoTransactions.length);
+      while (count * percentStep < 100) {
+        let index = Math.floor(count * percentStep * requested_results_payments.length / 100);
+        checkPoints.push({ percent: count * percentStep, orderId: requested_results_payments[index].orderId });
+        count++;
       }
 
-      let multiplePaymentElements = multipleTentativePaymentMap.get(result_payment.orderId) > 1 ? true : false;
-
-      const header_attributes = headerMap.get(result_payment.orderId);
-
-
-      try {
-        const basket_attributes = basketMap.get(result_payment.orderId);
-        const product_attributes = Object.assign([], results_products.filter((item) => item.orderId == result_payment.orderId));
-
-        const sumTotalBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productTotalAmountWithTax), 0).toFixed(2);
-        const sumImmediateBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productImmediateAmountWithTax), 0).toFixed(2);
-        const internalTotalCheck = sumTotalBaskets == header_attributes.headerTotalAmountWithTax;
-        const internalImmediateCheck = sumImmediateBaskets == result_payment.paymentAmountWithTax;
-        const containsPaymentRegularisation = product_attributes.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0;
-        let moneticoImmediateCheck;
-        let conduentTotalCheck;
-        let moneticoStatus;
-        let moneticoAmount;
-        let conduentStatus;
-        let conduentAmount;
+      checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
+      headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
+      basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
+      moneticoMap = new Map(results_monetico.map((item) => [item.reference, item]));
+      conduentRefMap = new Map(results_conduent.map((item) => [item.truncatedReference, item]));
+      conduentIDGCCMap = new Map(results_conduent.map((item) => [item.IDGCC + item.userCode, item]));
 
 
-        const MoneticoFound = moneticoMap.get(result_payment.paymentRef);
+      successResultsPayments = requested_results_payments.filter((item) => item.paymentStatus == "SUCCESS");
 
-        if (MoneticoFound != undefined) {
-          moneticoImmediateCheck = sumImmediateBaskets == MoneticoFound.amount
-          moneticoAmount = MoneticoFound.amount;
-          moneticoStatus = MoneticoFound.moneticoStatus;
-          moneticoTPE = MoneticoFound.tpe;
-          moneticoReference = MoneticoFound.reference
-        } else {
-          const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
-          if (allMoneticoResultsFound.length > 0) {
-            const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
-            moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
-            moneticoAmount = monetico_attributes.amount;
-            moneticoStatus = monetico_attributes.moneticoStatus;
-            moneticoTPE = monetico_attributes.tpe;
-            moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
+
+
+
+      const multiplePaymentMap = successResultsPayments.reduce((accumulator, payment) => {
+        accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
+        return accumulator;
+      }, new Map());
+
+      const multipleTentativePaymentMap = requested_results_payments.reduce((accumulator, payment) => {
+        accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
+        return accumulator;
+      }, new Map());
+
+
+
+      successResultsPayments.forEach(function (result_payment) {
+        const findCheckPoint = checkPointMap.get(result_payment.orderId);
+        if (findCheckPoint != undefined) {
+          console.log("Réalisé: " + findCheckPoint + "%");
+        }
+
+        let multiplePaymentElements = multipleTentativePaymentMap.get(result_payment.orderId) > 1 ? true : false;
+
+        const header_attributes = headerMap.get(result_payment.orderId);
+
+
+        try {
+          const basket_attributes = basketMap.get(result_payment.orderId);
+          const product_attributes = Object.assign([], results_products.filter((item) => item.orderId == result_payment.orderId));
+
+          const sumTotalBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productTotalAmountWithTax), 0).toFixed(2);
+          const sumImmediateBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productImmediateAmountWithTax), 0).toFixed(2);
+          const internalTotalCheck = sumTotalBaskets == header_attributes.headerTotalAmountWithTax;
+          const internalImmediateCheck = sumImmediateBaskets == result_payment.paymentAmountWithTax;
+          const containsPaymentRegularisation = product_attributes.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0;
+          let moneticoImmediateCheck;
+          let conduentTotalCheck;
+          let moneticoStatus;
+          let moneticoAmount;
+          let conduentStatus;
+          let conduentAmount;
+
+
+          const MoneticoFound = moneticoMap.get(result_payment.paymentRef);
+
+          if (MoneticoFound != undefined) {
+            moneticoImmediateCheck = sumImmediateBaskets == MoneticoFound.amount
+            moneticoAmount = MoneticoFound.amount;
+            moneticoStatus = MoneticoFound.moneticoStatus;
+            moneticoTPE = MoneticoFound.tpe;
+            moneticoReference = MoneticoFound.reference
           } else {
-            moneticoImmediateCheck = "Monetico Not Found";
-            moneticoStatus = "Monetico Not Found";
-            moneticoAmount = "Monetico Not Found";
-            moneticoTPE = "Monetico Not Found";
-            moneticoReference = "Monetico Not Found";
+            const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
+            if (allMoneticoResultsFound.length > 0) {
+              const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
+              moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
+              moneticoAmount = monetico_attributes.amount;
+              moneticoStatus = monetico_attributes.moneticoStatus;
+              moneticoTPE = monetico_attributes.tpe;
+              moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
+            } else {
+              moneticoImmediateCheck = "Monetico Not Found";
+              moneticoStatus = "Monetico Not Found";
+              moneticoAmount = "Monetico Not Found";
+              moneticoTPE = "Monetico Not Found";
+              moneticoReference = "Monetico Not Found";
+            }
           }
+
+          let conduent_attributes = searchConduentfromPaymentObj(result_payment, header_attributes, basket_attributes);
+
+          let duplicatePayment = multiplePaymentMap.get(result_payment.orderId) > 1 ? true : false;
+
+          if (header_attributes != undefined) {
+            delete header_attributes.orderId;
+          }
+          if (basket_attributes != undefined) {
+            delete basket_attributes.orderId;
+          }
+          transactions.push({ ...result_payment, ...header_attributes, ...basket_attributes, containsPaymentRegularisation, sumTotalBaskets, sumImmediateBaskets, internalTotalCheck, internalImmediateCheck, moneticoImmediateCheck, duplicatePayment, moneticoStatus, moneticoTPE, moneticoAmount, moneticoReference, ...conduent_attributes, multiplePaymentElements })
+        } catch (error) {
+          console.error('Something went wrong with orderId:', result_payment.orderId)
         }
+      })
 
-        let conduent_attributes = searchConduentfromPaymentObj(result_payment, header_attributes, basket_attributes);
-
-        let duplicatePayment = multiplePaymentMap.get(result_payment.orderId) > 1 ? true : false;
-
-        if (header_attributes != undefined) {
-          delete header_attributes.orderId;
+      console.log(remainingMoneticoTransactions.length);
+      remainingMoneticoTransactions.forEach(function (remaining_monetico) {
+        let currentRemainingMoneticoTransaction;
+        const payment_attributes = Object.assign({}, requested_results_payments.find(item => item.orderId == remaining_monetico.truncatedPaymentRef));
+        if (Object.keys(payment_attributes).length > 0) {
+          const header_attributes = Object.assign({}, results_headers.find(item => item.orderId == payment_attributes.orderId));
+          const ConduentFound = searchConduentfromPaymentObj(payment_attributes, header_attributes);
+          currentRemainingMoneticoTransaction = {
+            orderId: payment_attributes.orderId,
+            status: header_attributes.status,
+            moneticoStatus: remaining_monetico.moneticoStatus,
+            moneticoTPE: remaining_monetico.tpe,
+            paymentRef: remaining_monetico.reference,
+            conduentStatus: ConduentFound.conduentStatus,
+            paymentStatus: payment_attributes.paymentStatus
+          };
+          transactions.push({ ...payment_attributes, ...header_attributes, ...ConduentFound, ...remaining_monetico });
+        } else {
+          currentRemainingMoneticoTransaction = {
+            orderId: "NOT FOUND"
+          };
+          transactions.push({ ...currentRemainingMoneticoTransaction, ...remaining_monetico });
         }
-        if (basket_attributes != undefined) {
-          delete basket_attributes.orderId;
-        }
-        transactions.push({ ...result_payment, ...header_attributes, ...basket_attributes, containsPaymentRegularisation, sumTotalBaskets, sumImmediateBaskets, internalTotalCheck, internalImmediateCheck, moneticoImmediateCheck, duplicatePayment, moneticoStatus, moneticoTPE, moneticoAmount, moneticoReference, ...conduent_attributes, multiplePaymentElements })
-      } catch (error) {
-        console.error('Something went wrong with orderId:', result_payment.orderId)
-      }
-    })
+      });
 
-    console.log(remainingMoneticoTransactions.length);
-    remainingMoneticoTransactions.forEach(function (remaining_monetico) {
-      let currentRemainingMoneticoTransaction;
-      const payment_attributes = Object.assign({}, requested_results_payments.find(item => item.orderId == remaining_monetico.truncatedPaymentRef));
-      if (Object.keys(payment_attributes).length > 0) {
-        const header_attributes = Object.assign({}, results_headers.find(item => item.orderId == payment_attributes.orderId));
-        const ConduentFound = searchConduentfromPaymentObj(payment_attributes, header_attributes);
-        currentRemainingMoneticoTransaction = {
-          orderId: payment_attributes.orderId,
-          status: header_attributes.status,
-          moneticoStatus: remaining_monetico.moneticoStatus,
-          moneticoTPE: remaining_monetico.tpe,
-          paymentRef: remaining_monetico.reference,
-          conduentStatus: ConduentFound.conduentStatus,
-          paymentStatus: payment_attributes.paymentStatus
-        };
-        transactions.push({ ...payment_attributes, ...header_attributes, ...ConduentFound, ...remaining_monetico });
-      } else {
-        currentRemainingMoneticoTransaction = {
-          orderId: "NOT FOUND"
-        };
-        transactions.push({ ...currentRemainingMoneticoTransaction, ...remaining_monetico });
-      }
-    });
+      const transactionsWithCase = transactions.map(transaction => ({
+        ...transaction,
+        newCase1: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
+        newCase2: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'Autre') ? true : false,
+        newCase3: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus == 'Conduent Not Found') ? true : false,
+        newCase4: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentStatus != 'ANN' && transaction.status == 'VALIDATION_ERROR') ? true : false,
+        newCase5: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentTotalCheck == false && transaction.conduentPaymentMode != 'Autre') ? true : false,
+        newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
+        newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
+        newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
+        newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
+        newCase10: (transaction.paymentStatus != "SUCCESS") ? true : false
+      }));
 
-    const transactionsWithCase = transactions.map(transaction => ({
-      ...transaction,
-      newCase1: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-      newCase2: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'Autre') ? true : false,
-      newCase3: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus == 'Conduent Not Found') ? true : false,
-      newCase4: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentStatus != 'ANN' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-      newCase5: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentTotalCheck == false && transaction.conduentPaymentMode != 'Autre') ? true : false,
-      newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
-      newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-      newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
-      newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-      newCase10: (transaction.paymentStatus != "SUCCESS") ? true : false
-    }));
-
-    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactionsWithCase));
-  }
-
-  if (callbackKOFileToProcess) {
-    console.log('Début de la construction du fichier des callbacks KO');
-    let moneticoTransactions = [];
-    results_monetico.shift();
-
-    let percentStep = 2;
-    let count = 1;
-    let checkPoints = [];
-    while (count * percentStep < 100) {
-      let index = Math.floor(count * percentStep * results_monetico.length / 100);
-      checkPoints.push({ percent: count * percentStep, reference: results_monetico[index].reference });
-      count++;
+      fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactionsWithCase));
     }
 
+    if (callbackKOFileToProcess) {
+      console.log('Début de la construction du fichier des callbacks KO');
+      let moneticoTransactions = [];
+      results_monetico.shift();
 
-
-    requested_results_monetico.forEach(function (result_monetico) {
-      let findCheckPoint = checkPoints.findIndex((item) => item.reference == result_monetico.reference);
-      if (findCheckPoint != -1) {
-        console.log("Réalisé: " + checkPoints[findCheckPoint].percent + "%");
-        checkPoints.splice(findCheckPoint, 1);
+      let percentStep = 2;
+      let count = 1;
+      let checkPoints = [];
+      while (count * percentStep < 100) {
+        let index = Math.floor(count * percentStep * results_monetico.length / 100);
+        checkPoints.push({ percent: count * percentStep, reference: results_monetico[index].reference });
+        count++;
       }
-      if (moneticoPaidStatuses.includes(result_monetico.moneticoStatus)) {
-        const findSeparatorforRef = result_monetico.reference.indexOf("$");
-        const truncatedPaymentRef = findSeparatorforRef != -1 ? result_monetico.reference.substring(0, findSeparatorforRef) : result_monetico.reference;
-        const foundHeader = results_headers.find((item) => item.orderId == truncatedPaymentRef);
-        const ref = result_monetico.reference;
-        const moneticoStatus = result_monetico.moneticoStatus;
-        const date = result_monetico.date;
-        if (foundHeader) {
-          const { orderId, status } = foundHeader;
-          if (status == "PAYMENT_PROCESSING") {
-            moneticoTransactions.push({ orderId, status, ref, moneticoStatus, date });
-          }
-        } else {
-          moneticoTransactions.push({ 'orderId': 'NULL', 'status': 'NULL', ref, moneticoStatus, date });
+
+
+
+      requested_results_monetico.forEach(function (result_monetico) {
+        let findCheckPoint = checkPoints.findIndex((item) => item.reference == result_monetico.reference);
+        if (findCheckPoint != -1) {
+          console.log("Réalisé: " + checkPoints[findCheckPoint].percent + "%");
+          checkPoints.splice(findCheckPoint, 1);
         }
-      }
-    })
+        if (moneticoPaidStatuses.includes(result_monetico.moneticoStatus)) {
+          const findSeparatorforRef = result_monetico.reference.indexOf("$");
+          const truncatedPaymentRef = findSeparatorforRef != -1 ? result_monetico.reference.substring(0, findSeparatorforRef) : result_monetico.reference;
+          const foundHeader = results_headers.find((item) => item.orderId == truncatedPaymentRef);
+          const ref = result_monetico.reference;
+          const moneticoStatus = result_monetico.moneticoStatus;
+          const date = result_monetico.date;
+          if (foundHeader) {
+            const { orderId, status } = foundHeader;
+            if (status == "PAYMENT_PROCESSING") {
+              moneticoTransactions.push({ orderId, status, ref, moneticoStatus, date });
+            }
+          } else {
+            moneticoTransactions.push({ 'orderId': 'NULL', 'status': 'NULL', ref, moneticoStatus, date });
+          }
+        }
+      })
 
-    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[1]), build_callbackKO(moneticoTransactions));
+      fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[1]), build_callbackKO(moneticoTransactions));
+    }
+
+    return zipFile
+  } catch (error) {
+    console.error('Error filtering successful payments:', error);
   }
-
-  return zipFile
-
 }
 
 function searchConduentfromPaymentObj(result_payment, header_attributes, basket_attributes) {
