@@ -195,7 +195,10 @@ function build_extract(requested_results_payments, results_headers, results_bask
       let count = 1;
       let checkPoints = [];
       let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus) && item.tpe == "7630196");
-      console.log(remainingMoneticoTransactions.length);
+      let remainingMoneticoMap = new Map(
+        remainingMoneticoTransactions.map(item => [item.reference, item])
+      );
+      console.log(remainingMoneticoMap.size);
       while (count * percentStep < 100) {
         let index = Math.floor(count * percentStep * requested_results_payments.length / 100);
         checkPoints.push({ percent: count * percentStep, orderId: requested_results_payments[index].orderId });
@@ -205,6 +208,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
       checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
       headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
       basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
+      paymentMap = new Map(requested_results_payments.map((item) => [item.orderId, item]));
       moneticoMap = new Map(results_monetico.map((item) => [item.reference, item]));
       conduentRefMap = new Map(results_conduent.map((item) => [item.truncatedReference, item]));
       conduentIDGCCMap = new Map(results_conduent.map((item) => [item.IDGCC + item.userCode, item]));
@@ -263,6 +267,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
             moneticoStatus = MoneticoFound.moneticoStatus;
             moneticoTPE = MoneticoFound.tpe;
             moneticoReference = MoneticoFound.reference
+            remainingMoneticoMap.delete(MoneticoFound.reference);
           } else {
             const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
             if (allMoneticoResultsFound.length > 0) {
@@ -297,30 +302,32 @@ function build_extract(requested_results_payments, results_headers, results_bask
         }
       })
 
-      console.log(remainingMoneticoTransactions.length);
-      remainingMoneticoTransactions.forEach(function (remaining_monetico) {
+      console.log(remainingMoneticoMap.size);
+      for (const [key,value] of remainingMoneticoMap.entries()) {
         let currentRemainingMoneticoTransaction;
-        const payment_attributes = Object.assign({}, requested_results_payments.find(item => item.orderId == remaining_monetico.truncatedPaymentRef));
-        if (Object.keys(payment_attributes).length > 0) {
-          const header_attributes = Object.assign({}, results_headers.find(item => item.orderId == payment_attributes.orderId));
-          const ConduentFound = searchConduentfromPaymentObj(payment_attributes, header_attributes);
+        const payment_attributes = paymentMap.get(value.truncatedPaymentRef);
+        if (payment_attributes!=undefined) {
+          const header_attributes = headerMap.get(payment_attributes.orderId);
+          const basket_attributes = basketMap.get(payment_attributes.orderId);  
+          const ConduentFound = searchConduentfromPaymentObj(payment_attributes, header_attributes,basket_attributes);
           currentRemainingMoneticoTransaction = {
             orderId: payment_attributes.orderId,
             status: header_attributes.status,
-            moneticoStatus: remaining_monetico.moneticoStatus,
-            moneticoTPE: remaining_monetico.tpe,
-            paymentRef: remaining_monetico.reference,
+            moneticoStatus: value.moneticoStatus,
+            moneticoTPE: value.tpe,
+            paymentRef: value.reference,
             conduentStatus: ConduentFound.conduentStatus,
             paymentStatus: payment_attributes.paymentStatus
           };
-          transactions.push({ ...payment_attributes, ...header_attributes, ...ConduentFound, ...remaining_monetico });
         } else {
           currentRemainingMoneticoTransaction = {
             orderId: "NOT FOUND"
           };
-          transactions.push({ ...currentRemainingMoneticoTransaction, ...remaining_monetico });
+         
         }
-      });
+        transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
+      }
+
 
       const transactionsWithCase = transactions.map(transaction => ({
         ...transaction,
