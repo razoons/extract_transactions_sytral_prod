@@ -184,87 +184,105 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       count++;
     }
 
-    results_payments.forEach(function (result_payment) {
-      let findCheckPoint = checkPoints.findIndex((item) => item.orderId == result_payment.orderId);
-      if (findCheckPoint != -1) {
-        console.log("Réalisé: " + checkPoints[findCheckPoint].percent + "%");
-        checkPoints.splice(findCheckPoint, 1);
+    const checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
+    const headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
+    const basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
+    const moneticoMap = new Map(results_monetico.map((item) => [item.reference, item]));
+    const conduentRefMap = new Map(results_conduent.map((item) => [item.truncatedReference, item]));
+    const conduentIDGCCMap = new Map(results_conduent.map((item) => [item.IDGCC + item.userCode, item]));
+
+    const successResultsPayments = results_payments.filter((item) => item.paymentStatus == "SUCCESS");
+
+
+    const multiplePaymentMap = successResultsPayments.reduce((accumulator, payment) => {
+      accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
+      return accumulator;
+    }, new Map());
+
+    const multipleTentativePaymentMap = results_payments.reduce((accumulator, payment) => {
+      accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
+      return accumulator;
+    }, new Map());
+
+
+
+    successResultsPayments.forEach(function (result_payment) {
+      const findCheckPoint = checkPointMap.get(result_payment.orderId);
+      if (findCheckPoint != undefined) {
+        console.log("Réalisé: " + findCheckPoint + "%");
       }
 
-      let multiplePaymentElements = false;
-      if (results_payments.filter((item) => item.orderId == result_payment.orderId).length > 1) {
-        multiplePaymentElements = true;
-      }
-      const header_attributes = Object.assign({}, results_headers.find((item) => item.orderId == result_payment.orderId));
-      if ((result_payment.paymentStatus == "SUCCESS")) {
+      let multiplePaymentElements = multipleTentativePaymentMap.get(result_payment.orderId) > 1 ? true : false;
 
-        try {
-          const basket_attributes = Object.assign({}, results_baskets.find((item) => item.orderId == result_payment.orderId));
-          const product_attributes = Object.assign([], results_products.filter((item) => item.orderId == result_payment.orderId));
-
-          const sumTotalBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productTotalAmountWithTax), 0).toFixed(2);
-          const sumImmediateBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productImmediateAmountWithTax), 0).toFixed(2);
-          const internalTotalCheck = sumTotalBaskets == header_attributes.headerTotalAmountWithTax;
-          const internalImmediateCheck = sumImmediateBaskets == result_payment.paymentAmountWithTax;
-          const containsPaymentRegularisation = product_attributes.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0;
-          let moneticoImmediateCheck;
-          let conduentTotalCheck;
-          let moneticoStatus;
-          let moneticoAmount;
-          let conduentStatus;
-          let conduentAmount;
+      const header_attributes = headerMap.get(result_payment.orderId);
 
 
-          const indexMoneticoFound = results_monetico.findIndex(item => item.reference == result_payment.paymentRef);
+      try {
+        const basket_attributes = basketMap.get(result_payment.orderId);
+        const product_attributes = Object.assign([], results_products.filter((item) => item.orderId == result_payment.orderId));
 
-          if (indexMoneticoFound != -1) {
-            const monetico_attributes = Object.assign({}, results_monetico[indexMoneticoFound]);
+        const sumTotalBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productTotalAmountWithTax), 0).toFixed(2);
+        const sumImmediateBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productImmediateAmountWithTax), 0).toFixed(2);
+        const internalTotalCheck = sumTotalBaskets == header_attributes.headerTotalAmountWithTax;
+        const internalImmediateCheck = sumImmediateBaskets == result_payment.paymentAmountWithTax;
+        const containsPaymentRegularisation = product_attributes.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0;
+        let moneticoImmediateCheck;
+        let conduentTotalCheck;
+        let moneticoStatus;
+        let moneticoAmount;
+        let conduentStatus;
+        let conduentAmount;
+
+
+        const MoneticoFound = moneticoMap.get(result_payment.paymentRef);
+
+        if (MoneticoFound != undefined) {
+          moneticoImmediateCheck = sumImmediateBaskets == MoneticoFound.amount
+          moneticoAmount = MoneticoFound.amount;
+          moneticoStatus = MoneticoFound.moneticoStatus;
+          moneticoTPE = MoneticoFound.tpe;
+          moneticoReference = MoneticoFound.reference
+        } else {
+          const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
+          if (allMoneticoResultsFound.length > 0) {
+            const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
             moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
             moneticoAmount = monetico_attributes.amount;
             moneticoStatus = monetico_attributes.moneticoStatus;
             moneticoTPE = monetico_attributes.tpe;
-            moneticoReference = monetico_attributes.reference
+            moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
           } else {
-            const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
-            if (allMoneticoResultsFound.length > 0) {
-              const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
-              moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
-              moneticoAmount = monetico_attributes.amount;
-              moneticoStatus = monetico_attributes.moneticoStatus;
-              moneticoTPE = monetico_attributes.tpe;
-              moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
-            } else {
-              moneticoImmediateCheck = "Monetico Not Found";
-              moneticoStatus = "Monetico Not Found";
-              moneticoAmount = "Monetico Not Found";
-              moneticoTPE = "Monetico Not Found";
-              moneticoReference = "Monetico Not Found";
-            }
+            moneticoImmediateCheck = "Monetico Not Found";
+            moneticoStatus = "Monetico Not Found";
+            moneticoAmount = "Monetico Not Found";
+            moneticoTPE = "Monetico Not Found";
+            moneticoReference = "Monetico Not Found";
           }
+        }
 
 
-          if (result_payment.paymentRef != 'NULL') {
-            const indexConduentFoundwithMonetico = results_conduent.findIndex(item => item.truncatedReference == result_payment.truncatedPaymentRef);
-            if (indexConduentFoundwithMonetico != -1) {
-              const conduent_attributes = Object.assign({}, results_conduent[indexConduentFoundwithMonetico]);
-              conduentTotalCheck = header_attributes.headerTotalAmountWithTax == conduent_attributes.amount;
-              conduentAmount = conduent_attributes.amount;
-              conduentStatus = conduent_attributes.conduentStatus;
-              conduentPaymentMode = conduent_attributes.paymentMode;
-              conduentTransactionNumber = conduent_attributes.reference;
-              conduentIDGCC = conduent_attributes.IDGCC;
-              conduentEmail = conduent_attributes.email;
-            } else {
-              const indexConduentFoundwithSEPA = results_conduent.findIndex(item => item.IDGCC == basket_attributes.providerBasketId && item.userCode == basket_attributes.providerUserId);
-              if (indexConduentFoundwithSEPA != -1) {
-                const conduent_attributes = Object.assign({}, results_conduent[indexConduentFoundwithSEPA]);
-                conduentTotalCheck = header_attributes.headerTotalAmountWithTax == conduent_attributes.amount;
-                conduentAmount = conduent_attributes.amount;
-                conduentStatus = conduent_attributes.conduentStatus;
-                conduentPaymentMode = conduent_attributes.paymentMode;
-                conduentTransactionNumber = conduent_attributes.reference;
-                conduentIDGCC = conduent_attributes.IDGCC;
-                conduentEmail = conduent_attributes.email;
+        if (result_payment.paymentRef != 'NULL') {
+          const ConduentFoundwithMonetico = conduentRefMap.get(result_payment.truncatedPaymentRef);
+
+          if (ConduentFoundwithMonetico != undefined) {
+            conduentTotalCheck = header_attributes.headerTotalAmountWithTax == ConduentFoundwithMonetico.amount;
+            conduentAmount = ConduentFoundwithMonetico.amount;
+            conduentStatus = ConduentFoundwithMonetico.conduentStatus;
+            conduentPaymentMode = ConduentFoundwithMonetico.paymentMode;
+            conduentTransactionNumber = ConduentFoundwithMonetico.reference;
+            conduentIDGCC = ConduentFoundwithMonetico.IDGCC;
+            conduentEmail = ConduentFoundwithMonetico.email;
+          } else {
+            if (basket_attributes != undefined) {
+              const ConduentFoundwithIDGCC = conduentIDGCCMap.get(basket_attributes.providerBasketId + basket_attributes.providerUserId);
+              if (ConduentFoundwithIDGCC != undefined) {
+                conduentTotalCheck = header_attributes.headerTotalAmountWithTax == ConduentFoundwithIDGCC.amount;
+                conduentAmount = ConduentFoundwithIDGCC.amount;
+                conduentStatus = ConduentFoundwithIDGCC.conduentStatus;
+                conduentPaymentMode = ConduentFoundwithIDGCC.paymentMode;
+                conduentTransactionNumber = ConduentFoundwithIDGCC.reference;
+                conduentIDGCC = ConduentFoundwithIDGCC.IDGCC;
+                conduentEmail = ConduentFoundwithIDGCC.email;
               } else {
                 conduentTotalCheck = "Conduent Not Found";
                 conduentStatus = "Conduent Not Found";
@@ -274,18 +292,6 @@ function build_extract(results_payments, results_headers, results_baskets, resul
                 conduentIDGCC = "Conduent Not Found";
                 conduentEmail = "Conduent Not Found";
               }
-            }
-          } else {
-            const indexConduentFoundwithSEPA = results_conduent.findIndex(item => item.paymentMode == "Autre" && item.IDGCC == basket_attributes.providerBasketId);
-            if (indexConduentFoundwithSEPA != -1) {
-              const conduent_attributes = Object.assign({}, results_conduent[indexConduentFoundwithSEPA]);
-              conduentTotalCheck = header_attributes.headerTotalAmountWithTax == conduent_attributes.amount;
-              conduentAmount = conduent_attributes.amount;
-              conduentStatus = conduent_attributes.conduentStatus;
-              conduentPaymentMode = conduent_attributes.paymentMode;
-              conduentTransactionNumber = conduent_attributes.reference;
-              conduentIDGCC = conduent_attributes.IDGCC;
-              conduentEmail = conduent_attributes.email;
             } else {
               conduentTotalCheck = "Conduent Not Found";
               conduentStatus = "Conduent Not Found";
@@ -296,40 +302,26 @@ function build_extract(results_payments, results_headers, results_baskets, resul
               conduentEmail = "Conduent Not Found";
             }
           }
-
-          let duplicatePayment = false;
-          const duplicatePaymentTransactionsIndex = transactions
-            .map((item, index) => item.orderId == result_payment.orderId ? index : -1)
-            .filter(index => index != -1);
-          if (duplicatePaymentTransactionsIndex.length > 0) {
-            duplicatePaymentTransactionsIndex.forEach(function (transactionIndex) {
-              transactions[transactionIndex].duplicatePayment = true;
-            })
-            duplicatePayment = true;
-          }
-
-          if ((header_attributes) && (basket_attributes)) {
-            delete header_attributes.orderId;
-            delete basket_attributes.orderId;
-
-            //case1 = (conduentStatus == "Conduent Not Found" && moneticoStatus == "Monetico Not Found");
-            //case2 = (header_attributes.status == 'VALIDATION_ERROR' && conduentStatus != 'Conduent Not Found' && moneticoStatus != 'Monetico Not Found');
-            //case4 = (header_attributes.status == 'VALIDATION_ERROR' && conduentStatus == 'Conduent Not Found' && moneticoStatus != 'Monetico Not Found' && moneticoStatus != 'RE');
-            //case5 = (header_attributes.status == 'FINALIZED' && conduentStatus == 'Conduent Not Found' && moneticoStatus != 'Monetico Not Found' && moneticoStatus != 'RE');
-            //case6 = (header_attributes.status != 'VALIDATION_ERROR' && header_attributes.status != 'FINALIZED' && conduentStatus == 'Conduent Not Found' && moneticoStatus != 'Monetico Not Found' && moneticoStatus != 'RE');
-            //case9 = (conduentStatus != 'Conduent Not Found' && moneticoImmediateCheck == false && internalTotalCheck == false);
-            //case10 = (conduentStatus == 'Conduent Not Found' && moneticoImmediateCheck == false && internalTotalCheck == false);
-
-            transactions.push({ ...result_payment, ...header_attributes, ...basket_attributes, containsPaymentRegularisation, sumTotalBaskets, sumImmediateBaskets, internalTotalCheck, internalImmediateCheck, moneticoImmediateCheck, conduentTotalCheck, duplicatePayment, moneticoStatus, moneticoTPE, moneticoAmount, moneticoReference, conduentStatus, conduentIDGCC, conduentTransactionNumber, conduentPaymentMode, conduentAmount, conduentEmail, multiplePaymentElements })
-            if (indexMoneticoFound != -1) {
-              results_monetico.splice(indexMoneticoFound, 1);
-            }
-          } else {
-            console.error('Data missing for orderId:', result_payment.orderId)
-          }
-        } catch (error) {
-          console.error('Something went wrong with orderId:', result_payment.orderId)
+        } else {
+          conduentTotalCheck = "Conduent Not Found";
+          conduentStatus = "Conduent Not Found";
+          conduentAmount = "Conduent Not Found";
+          conduentPaymentMode = "Conduent Not Found";
+          conduentTransactionNumber = "Conduent Not Found";
+          conduentIDGCC = "Conduent Not Found";
+          conduentEmail = "Conduent Not Found";
         }
+        let duplicatePayment = multiplePaymentMap.get(result_payment.orderId) > 1 ? true : false;
+
+        if (header_attributes != undefined) {
+          delete header_attributes.orderId;
+        }
+        if (basket_attributes != undefined) {
+          delete basket_attributes.orderId;
+        }
+        transactions.push({ ...result_payment, ...header_attributes, ...basket_attributes, containsPaymentRegularisation, sumTotalBaskets, sumImmediateBaskets, internalTotalCheck, internalImmediateCheck, moneticoImmediateCheck, conduentTotalCheck, duplicatePayment, moneticoStatus, moneticoTPE, moneticoAmount, moneticoReference, conduentStatus, conduentIDGCC, conduentTransactionNumber, conduentPaymentMode, conduentAmount, conduentEmail, multiplePaymentElements })
+      } catch (error) {
+        console.error('Something went wrong with orderId:', result_payment.orderId)
       }
     })
 
@@ -346,7 +338,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false
     }));
 
-    fs.writeFileSync(path.join(__dirname,'outputs', zipFile[0]), build_internal(transactionsWithCase));
+    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactionsWithCase));
   }
 
   if (callbackKOFileToProcess) {
@@ -389,7 +381,7 @@ function build_extract(results_payments, results_headers, results_baskets, resul
       }
     })
 
-    fs.writeFileSync(path.join(__dirname,'outputs', zipFile[1]), build_callbackKO(moneticoTransactions));
+    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[1]), build_callbackKO(moneticoTransactions));
   }
 
   return zipFile
