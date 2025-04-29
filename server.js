@@ -303,29 +303,32 @@ function build_extract(requested_results_payments, results_headers, results_bask
       })
 
       console.log(remainingMoneticoMap.size);
-      for (const [key,value] of remainingMoneticoMap.entries()) {
+      for (const [key, value] of remainingMoneticoMap.entries()) {
         let currentRemainingMoneticoTransaction;
         const payment_attributes = paymentMap.get(value.truncatedPaymentRef);
-        if (payment_attributes!=undefined) {
+        if (payment_attributes != undefined) {
           const header_attributes = headerMap.get(payment_attributes.orderId);
-          const basket_attributes = basketMap.get(payment_attributes.orderId);  
-          const ConduentFound = searchConduentfromPaymentObj(payment_attributes, header_attributes,basket_attributes);
+          const basket_attributes = basketMap.get(payment_attributes.orderId);
+          const conduent_attributes = searchConduentfromPaymentObj(payment_attributes, header_attributes, basket_attributes);
+          let multiplePaymentElements = multipleTentativePaymentMap.get(payment_attributes.orderId) > 1 ? true : false;
           currentRemainingMoneticoTransaction = {
             orderId: payment_attributes.orderId,
-            status: header_attributes.status,
+            status: header_attributes.status || "",
             moneticoStatus: value.moneticoStatus,
             moneticoTPE: value.tpe,
-            paymentRef: value.reference,
-            conduentStatus: ConduentFound.conduentStatus,
-            paymentStatus: payment_attributes.paymentStatus
+            moneticoReference: value.reference,
+            moneticoAmount: value.amount,
+            conduentStatus: conduent_attributes.conduentStatus || "",
+            paymentStatus: payment_attributes.paymentStatus,
+            multiplePaymentElements: multiplePaymentElements
           };
+          transactions.push({ ...currentRemainingMoneticoTransaction, ...value, ...header_attributes, ...basket_attributes, ...conduent_attributes });
         } else {
           currentRemainingMoneticoTransaction = {
             orderId: "NOT FOUND"
           };
-         
+          transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
         }
-        transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
       }
 
 
