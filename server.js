@@ -185,9 +185,10 @@ function build_extract(requested_results_payments, results_headers, results_bask
   try {
     let zipFile = [
       'transactions_completes.csv',
-      'transactions_callbackKO.csv'
+      'transactions_callbackKO.csv',
+      'transactions_stats.csv',
     ];
-    let moneticoPaidStatuses = ['PA'];
+    let moneticoPaidStatuses = ['PA','PP'];
     if (completeFileToProcess) {
       console.log('Début de la construction du fichier des transactions complètes');
       let transactions = [];
@@ -346,7 +347,21 @@ function build_extract(requested_results_payments, results_headers, results_bask
         newCase10: (transaction.paymentStatus != "SUCCESS") ? true : false
       }));
 
+
+      let usecases = [];
+      for (let i = 1; i <= 10; i++) {
+        let stat = transactionsWithCase
+          .filter(item => item[`newCase${i}`] == true)
+          .sort((a, b) => a.paymentDate < b.paymentDate ? 1 : -1);
+        usecases[i] = {
+          usecase: i,
+          occurrences: stat.length,
+          lastDate: stat.length > 0 ? stat[0].paymentDate : "NULL"
+        }
+      }
+
       fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactionsWithCase));
+      fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[2]), build_stats(usecases));
     }
 
     if (callbackKOFileToProcess) {
@@ -473,6 +488,12 @@ function build_internal(transactions) {
 function build_callbackKO(transactions) {
   const result = build_csv(transactions, csv_format.callbackKO.headers_labels, csv_format.callbackKO.orderedAttributes);
   return result
+}
+
+function build_stats(usecases) {
+  const result = build_csv(usecases, csv_format.stats.headers_labels, csv_format.stats.orderedAttributes);
+  return result
+
 }
 
 

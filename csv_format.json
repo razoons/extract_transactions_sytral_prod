@@ -108,5 +108,17 @@
             "moneticoStatus",
             "date"
         ]
+    },
+    "stats": {
+        "headers_labels": [
+            "Usecase",
+            "Nombre d'occurrences",
+            "Dernière date de paiement"
+        ],
+        "orderedAttributes": [
+            "usecase",
+            "occurrences",
+            "lastDate"
+        ]
     }
 }
