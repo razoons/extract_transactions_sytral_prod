@@ -188,7 +188,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
       'transactions_callbackKO.csv',
       'transactions_stats.csv',
     ];
-    let moneticoPaidStatuses = ['PA','PP'];
+    let moneticoPaidStatuses = ['PA', 'PP'];
     if (completeFileToProcess) {
       console.log('Début de la construction du fichier des transactions complètes');
       let transactions = [];
@@ -326,7 +326,11 @@ function build_extract(requested_results_payments, results_headers, results_bask
           transactions.push({ ...currentRemainingMoneticoTransaction, ...value, ...header_attributes, ...basket_attributes, ...conduent_attributes });
         } else {
           currentRemainingMoneticoTransaction = {
-            orderId: "NOT FOUND"
+            orderId: "NOT FOUND",
+            moneticoStatus: value.moneticoStatus,
+            moneticoTPE: value.tpe,
+            moneticoReference: value.reference,
+            moneticoAmount: value.amount,
           };
           transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
         }
