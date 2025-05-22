@@ -318,6 +318,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
             moneticoStatus: value.moneticoStatus,
             moneticoTPE: value.tpe,
             moneticoReference: value.reference,
+            paymentRef:payment_attributes.paymentRef,
             moneticoAmount: value.amount,
             conduentStatus: conduent_attributes.conduentStatus || "",
             paymentStatus: payment_attributes.paymentStatus,
