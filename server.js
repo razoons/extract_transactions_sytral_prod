@@ -219,9 +219,9 @@ function build_extract(requested_results_payments, results_headers, results_bask
       let percentStep = 2;
       let count = 1;
       let checkPoints = [];
-      let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus) && item.tpe == "7630196");
+      let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus));
       let remainingMoneticoMap = new Map(
-        remainingMoneticoTransactions.map(item => [item.reference, item])
+        remainingMoneticoTransactions.map(item => [item.paymentId, item])
       );
       console.log(remainingMoneticoMap.size);
       while (count * percentStep < 100) {
@@ -314,6 +314,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
             moneticoAmount = MoneticoRetailFound.amount;
             moneticoStatus = MoneticoRetailFound.moneticoStatus;
             moneticoPaymentId = MoneticoRetailFound.paymentId
+            remainingMoneticoMap.delete(MoneticoRetailFound.paymentId);
           } else {
             moneticoImmediateCheck = "Monetico Not Found";
             moneticoStatus = "Monetico Not Found";
@@ -337,10 +338,10 @@ function build_extract(requested_results_payments, results_headers, results_bask
         }
       })
 
-      //console.log(remainingMoneticoMap.size);
-      /*for (const [key, value] of remainingMoneticoMap.entries()) {
+      console.log(remainingMoneticoMap.size);
+      for (const [key, value] of remainingMoneticoMap.entries()) {
         let currentRemainingMoneticoTransaction;
-        const payment_attributes = paymentMap.get(value.truncatedPaymentRef);
+        const payment_attributes = paymentMap.get(value.orderId);
         if (payment_attributes != undefined) {
           const header_attributes = headerMap.get(payment_attributes.orderId);
           const basket_attributes = basketMap.get(payment_attributes.orderId);
@@ -350,8 +351,7 @@ function build_extract(requested_results_payments, results_headers, results_bask
             orderId: payment_attributes.orderId,
             status: header_attributes.status || "",
             moneticoStatus: value.moneticoStatus,
-            moneticoTPE: value.tpe,
-            moneticoReference: value.reference,
+            moneticoReference: value.paymentId,
             paymentRef: payment_attributes.paymentRef,
             moneticoAmount: value.amount,
             conduentStatus: conduent_attributes.conduentStatus || "",
@@ -363,13 +363,12 @@ function build_extract(requested_results_payments, results_headers, results_bask
           currentRemainingMoneticoTransaction = {
             orderId: "NOT FOUND",
             moneticoStatus: value.moneticoStatus,
-            moneticoTPE: value.tpe,
-            moneticoReference: value.reference,
+            moneticoReference: value.paymentId,
             moneticoAmount: value.amount,
           };
           transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
         }
-      }*/
+      }
 
 
       const transactionsWithCase = transactions.map(transaction => ({
