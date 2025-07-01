@@ -63,7 +63,7 @@
             "conduentEmail",
             "paymentRef",
             "conduentTransactionNumber",
-            "moneticoReference",
+            "moneticoPaymentId",
             "conduentPaymentMode",
             "paymentSEPARef",
             "paymentStatus",
