@@ -18,6 +18,9 @@
         <input type="file" name="file_monetico_encours" id="file_monetico" accept=".csv">
         <h3>CSV Conduent (;)</h3>
         <input type="file" name="file_conduent" id="file_conduent" accept=".csv">
+        <h3>Date</h3>
+        <label for="startPaymentDate">Début</label><input type="text" name="startPaymentDate" id="startPaymentDate">
+        <label for="endPaymentDate">Fin</label><input type="text" name="endPaymentDate" id="endPaymentDate">
         <br />
         <br />
         <br />
@@ -25,6 +28,12 @@
     </form>
 </body>
 <script>
+    const inputDate = document.getElementById('endPaymentDate');
+    const todayDate = new Date();
+    const year = todayDate.getFullYear();
+    const month = todayDate.getMonth() + 1 > 9 ? todayDate.getMonth() + 1 : "0" + (todayDate.getMonth() + 1);
+    const date = todayDate.getDate() > 9 ? todayDate.getDate() : "0" + todayDate.getDate();
+    inputDate.value = year + '-' + month + '-' + date;
 </script>
 
 </html>

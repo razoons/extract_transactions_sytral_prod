@@ -66,7 +66,8 @@ async function process_monetico_retail_remisees(moneticoRemiseesFile) {
       .pipe(csv({ headers: ['orderId', 'type', 'amount', , 'date', , , , , , , 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, type, date, paymentId } = data;
+        const { orderId, type, paymentId } = data;
+        const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount);
         results_monetico_retail_remisees.push({ orderId, amount, type, date, paymentId });
       })
@@ -88,7 +89,8 @@ async function process_monetico_retail_encours(moneticoEncoursFile) {
       .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , , , , , , , 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, status, date, paymentId } = data;
+        const { orderId, status, paymentId } = data;
+        const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount);
         results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId });
       })
@@ -142,7 +144,8 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     let checkPoints = [];
 
     results_monetico_filtered = results_monetico.filter(item => moneticoPaidStatuses.includes(item.status));
-    
+    let remaining_results_conduent=results_conduent;
+
     while (count * percentStep < 100) {
       let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
       checkPoints.push({ percent: count * percentStep, paymentRef: results_monetico_filtered[index].paymentId });
@@ -237,11 +240,12 @@ app.post('/uploadcsv', upload.fields([
   const moneticoRemiseesFile = req.files.file_monetico_remisees ? req.files.file_monetico_remisees[0] : null;
   const moneticoEncoursFile = req.files.file_monetico_encours ? req.files.file_monetico_encours[0] : null;
   const conduentFile = req.files.file_conduent ? req.files.file_conduent[0] : null;
+  const requestedstartPaymentDate = req.body.startPaymentDate ? req.body.startPaymentDate : null;
+  const requestedendPaymentDate = req.body.endPaymentDate ? req.body.endPaymentDate : null;
 
 
 
   if (headerFile != null && moneticoRemiseesFile != null && moneticoEncoursFile != null && conduentFile != null) {
-
 
     try {
       await process_headers(headerFile);
@@ -257,6 +261,24 @@ app.post('/uploadcsv', upload.fields([
         ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId })),
         ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId })),
       ];
+
+      if (requestedstartPaymentDate != null || requestedendPaymentDate != null) {
+        results_monetico = results_monetico.filter((item) => {
+          let isValid = true;
+
+          // Then filter by requestedstartPaymentDate
+          if (requestedstartPaymentDate != null) {
+            isValid = isValid && item.date > requestedstartPaymentDate + ' 00:00:00';
+          }
+
+          // Then filter by requestedendPaymentDate
+          if (requestedendPaymentDate != null) {
+            isValid = isValid && item.date < requestedendPaymentDate + ' 00:00:00';
+          }
+
+          return isValid;
+        });
+      }
 
 
       results_conduent.splice(0, 1);
