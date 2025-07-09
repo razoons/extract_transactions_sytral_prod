@@ -25,20 +25,16 @@ app.get('/', (req, res) => {
 });
 
 let results_headers = [];
-let results_baskets = [];
-let results_payments = [];
-let results_products = [];
+let results_monetico_retail_remisees = [];
+let results_monetico_retail_encours = [];
 let results_monetico = [];
-let results_monetico_retail = [];
 let results_conduent = [];
-let requested_payments = [];
 let requested_results_monetico = [];
 let checkPointMap;
 let headerMap;
-let basketMap;
-let moneticoMap;
-let conduentRefMap;
-let conduentIDGCCMap;
+let monetico_remiseesMap;
+let monetico_encoursMap;
+let conduentMap;
 let successResultsPayments = [];
 
 async function process_headers(headerFile) {
@@ -64,87 +60,15 @@ async function process_headers(headerFile) {
   })
 }
 
-
-async function process_baskets(basketFile) {
+async function process_monetico_retail_remisees(moneticoRemiseesFile) {
   return new Promise((resolve, reject) => {
-    fs.createReadStream(basketFile.path)
-      .pipe(csv({ headers: ['orderId', , , 'providerBasketId', , 'providerUserId', 'supportId', , , , , , , , , , , , , , , , , , , , , , 'basketEmail'], separator: ',' }))
+    fs.createReadStream(moneticoRemiseesFile.path)
+      .pipe(csv({ headers: ['orderId', 'type', 'amount', , 'date', , , , , , , 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, providerBasketId, providerUserId, supportId, basketEmail } = data;
-
-        results_baskets.push({ orderId, providerBasketId, providerUserId, supportId, basketEmail });
-      })
-      .on('end', () => {
-        console.log(`Data has been converted and saved`);
-        resolve(); // Resolve the promise when the reading is complete
-      })
-      .on('error', (error) => {
-        console.error('Error reading the CSV file:', error);
-        reject(error); // Reject the promise if there's an error
-      });
-
-  })
-}
-
-async function process_payments(paymentFile) {
-  return new Promise((resolve, reject) => {
-    fs.createReadStream(paymentFile.path)
-      .pipe(csv({ headers: ['orderId', , , , "paymentAmountWithTax", "paymentStatus", "paymentRef", "paymentDate", "paymentSEPARef"], separator: ',' }))
-      .on('data', (data) => {
-
-        const { orderId, paymentStatus, paymentRef, paymentDate, paymentSEPARef } = data;
-        const paymentAmountWithTax = Math.round(parseFloat(data.paymentAmountWithTax) * 100) / 100;
-        const findSeparatorforRef = paymentRef.indexOf("$");
-        const truncatedPaymentRef = findSeparatorforRef != -1 ? paymentRef.substring(0, findSeparatorforRef) : paymentRef;
-        results_payments.push({ orderId, paymentAmountWithTax, paymentStatus, paymentRef, truncatedPaymentRef, paymentDate, paymentSEPARef });
-      })
-      .on('end', () => {
-        console.log(`Data has been converted and saved`);
-        resolve(); // Resolve the promise when the reading is complete
-      })
-      .on('error', (error) => {
-        console.error('Error reading the CSV file:', error);
-        reject(error); // Reject the promise if there's an error
-      });
-
-  })
-}
-
-async function process_products(productFile) {
-  return new Promise((resolve, reject) => {
-    fs.createReadStream(productFile.path)
-      .pipe(csv({ headers: ['orderId', 'basketLine', , 'productId', , , , , , , , , , , , 'productTotalAmountWithTax', , , , , , , , , , , , , , , , 'productProviderBasketId', 'productImmediateAmountWithTax'], separator: ',' }))
-      .on('data', (data) => {
-
-        const { orderId, basketLine, productProviderBasketId, productId } = data;
-        const productTotalAmountWithTax = Math.round(parseFloat(data.productTotalAmountWithTax) * 100) / 100;
-        const productImmediateAmountWithTax = Math.round(parseFloat(data.productImmediateAmountWithTax) * 100) / 100;
-        results_products.push({ orderId, basketLine, productTotalAmountWithTax, productImmediateAmountWithTax, productProviderBasketId, productId });
-      })
-      .on('end', () => {
-        console.log(`Data has been converted and saved`);
-        resolve(); // Resolve the promise when the reading is complete
-      })
-      .on('error', (error) => {
-        console.error('Error reading the CSV file:', error);
-        reject(error); // Reject the promise if there's an error
-      });
-
-  })
-}
-
-async function process_monetico(moneticoFile) {
-  return new Promise((resolve, reject) => {
-    fs.createReadStream(moneticoFile.path)
-      .pipe(csv({ headers: ['tpe', , 'reference', 'date', , 'amount', , 'moneticoStatus'], separator: ';' }))
-      .on('data', (data) => {
-
-        const { tpe, reference, date, moneticoStatus } = data;
+        const { orderId, type, date, paymentId } = data;
         const amount = parseFloat(data.amount);
-        const findSeparatorforRef = reference.indexOf("$");
-        const truncatedPaymentRef = findSeparatorforRef != -1 ? reference.substring(0, findSeparatorforRef) : reference;
-        results_monetico.push({ tpe, reference, date, amount, moneticoStatus, truncatedPaymentRef });
+        results_monetico_retail_remisees.push({ orderId, amount, type, date, paymentId });
       })
       .on('end', () => {
         console.log(`Data has been converted and saved`);
@@ -158,15 +82,15 @@ async function process_monetico(moneticoFile) {
   })
 }
 
-async function process_monetico_retail(moneticoFile) {
+async function process_monetico_retail_encours(moneticoEncoursFile) {
   return new Promise((resolve, reject) => {
-    fs.createReadStream(moneticoFile.path)
-      .pipe(csv({ headers: ['orderId', 'moneticoStatus', 'amount', , 'date', , , , , , , 'paymentId'], separator: ';' }))
+    fs.createReadStream(moneticoEncoursFile.path)
+      .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , , , , , , , 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, moneticoStatus, date, paymentId } = data;
+        const { orderId, status, date, paymentId } = data;
         const amount = parseFloat(data.amount);
-        results_monetico_retail.push({ orderId, amount, moneticoStatus, date, paymentId });
+        results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId });
       })
       .on('end', () => {
         console.log(`Data has been converted and saved`);
@@ -183,14 +107,13 @@ async function process_monetico_retail(moneticoFile) {
 async function process_conduent(conduentFile) {
   return new Promise((resolve, reject) => {
     fs.createReadStream(conduentFile.path)
-      .pipe(csv({ headers: [, 'reference', 'conduentStatus', , 'amount', 'paymentMode', 'userCode', 'email', , , 'IDGCC'], separator: ';' }))
+      .pipe(csv({ headers: [, 'reference', 'conduentStatus', 'date', 'amount', 'paymentMode', 'userCode', 'email', , , 'IDGCC'], separator: ';' }))
       .on('data', (data) => {
 
         const { reference, conduentStatus, userCode, paymentMode, email, IDGCC } = data;
+        const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount) / 100;
-        const findSeparatorforRef = reference.indexOf("$");
-        const truncatedReference = findSeparatorforRef != -1 ? reference.substring(0, findSeparatorforRef) : reference;
-        results_conduent.push({ reference, truncatedReference, conduentStatus, amount, userCode, paymentMode, email, IDGCC });
+        results_conduent.push({ reference, conduentStatus, date, amount, userCode, paymentMode, email, IDGCC });
       })
       .on('end', () => {
         console.log(`Data has been converted and saved`);
@@ -204,264 +127,76 @@ async function process_conduent(conduentFile) {
   })
 }
 
-function build_extract(requested_results_payments, results_headers, results_baskets, results_products, results_monetico, requested_results_monetico, results_conduent, completeFileToProcess) {
+function build_extract(results_headers, results_monetico, results_conduent) {
   console.log("check");
   try {
     let zipFile = [
-      'transactions_completes.csv',
-      'transactions_callbackKO.csv',
-      'transactions_stats.csv',
+      'transactions_completes.csv'
     ];
-    let moneticoPaidStatuses = ['Débit'];
-    if (completeFileToProcess) {
-      console.log('Début de la construction du fichier des transactions complètes');
-      let transactions = [];
-      let percentStep = 2;
-      let count = 1;
-      let checkPoints = [];
-      let remainingMoneticoTransactions = requested_results_monetico.filter(item => moneticoPaidStatuses.includes(item.moneticoStatus));
-      let remainingMoneticoMap = new Map(
-        remainingMoneticoTransactions.map(item => [item.paymentId, item])
-      );
-      console.log(remainingMoneticoMap.size);
-      while (count * percentStep < 100) {
-        let index = Math.floor(count * percentStep * requested_results_payments.length / 100);
-        checkPoints.push({ percent: count * percentStep, orderId: requested_results_payments[index].orderId });
-        count++;
-      }
+    let moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
 
-      checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
-      headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
-      basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
-      paymentMap = new Map(requested_results_payments.map((item) => [item.orderId, item]));
-      moneticoRetailMap = new Map(results_monetico.map((item) => [item.paymentId, item]));
-      conduentRefMap = new Map(results_conduent.map((item) => [item.truncatedReference, item]));
-      conduentIDGCCMap = new Map(results_conduent.map((item) => [item.IDGCC + item.userCode, item]));
+    console.log('Début de la construction du fichier des transactions complètes');
+    let transactions = [];
+    let percentStep = 2;
+    let count = 1;
+    let checkPoints = [];
 
-
-      successResultsPayments = requested_results_payments.filter((item) => item.paymentStatus == "SUCCESS");
-
-
-
-
-      const multiplePaymentMap = successResultsPayments.reduce((accumulator, payment) => {
-        accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
-        return accumulator;
-      }, new Map());
-
-      const multipleTentativePaymentMap = requested_results_payments.reduce((accumulator, payment) => {
-        accumulator.set(payment.orderId, (accumulator.get(payment.orderId) || 0) + 1);
-        return accumulator;
-      }, new Map());
-
-
-
-      successResultsPayments.forEach(function (result_payment) {
-        const findCheckPoint = checkPointMap.get(result_payment.orderId);
-        if (findCheckPoint != undefined) {
-          console.log("Réalisé: " + findCheckPoint + "%");
-        }
-
-        let multiplePaymentElements = multipleTentativePaymentMap.get(result_payment.orderId) > 1 ? true : false;
-
-        const header_attributes = headerMap.get(result_payment.orderId);
-
-
-        try {
-          const basket_attributes = basketMap.get(result_payment.orderId);
-          const product_attributes = Object.assign([], results_products.filter((item) => item.orderId == result_payment.orderId));
-
-          const sumTotalBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productTotalAmountWithTax), 0).toFixed(2);
-          const sumImmediateBaskets = product_attributes.reduce((acc, product) => acc + parseFloat(product.productImmediateAmountWithTax), 0).toFixed(2);
-          const internalTotalCheck = sumTotalBaskets == header_attributes.headerTotalAmountWithTax;
-          const internalImmediateCheck = sumImmediateBaskets == result_payment.paymentAmountWithTax;
-          const containsPaymentRegularisation = product_attributes.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0;
-          let moneticoImmediateCheck;
-          let moneticoStatus;
-          let moneticoAmount;
-
-
-          //const MoneticoFound = moneticoMap.get(result_payment.paymentRef);
-          const MoneticoRetailFound = moneticoRetailMap.get(result_payment.paymentRef);
-
-          /*if (MoneticoFound != undefined) {
-            moneticoImmediateCheck = sumImmediateBaskets == MoneticoFound.amount
-            moneticoAmount = MoneticoFound.amount;
-            moneticoStatus = MoneticoFound.moneticoStatus;
-            moneticoTPE = MoneticoFound.tpe;
-            moneticoReference = MoneticoFound.reference
-            remainingMoneticoMap.delete(MoneticoFound.reference);
-          } else {
-            const allMoneticoResultsFound = results_monetico.filter(item => item.truncatedPaymentRef == header_attributes.orderId && item.moneticoStatus != "EN" && item.moneticoStatus != "RE");
-            if (allMoneticoResultsFound.length > 0) {
-              const monetico_attributes = Object.assign({}, allMoneticoResultsFound[0]);
-              moneticoImmediateCheck = sumImmediateBaskets == monetico_attributes.amount
-              moneticoAmount = monetico_attributes.amount;
-              moneticoStatus = monetico_attributes.moneticoStatus;
-              moneticoTPE = monetico_attributes.tpe;
-              moneticoReference = allMoneticoResultsFound.map(result => result.reference).join("---");
-            } else {
-              moneticoImmediateCheck = "Monetico Not Found";
-              moneticoStatus = "Monetico Not Found";
-              moneticoAmount = "Monetico Not Found";
-              moneticoTPE = "Monetico Not Found";
-              moneticoReference = "Monetico Not Found";
-            }
-          }*/
-
-          if (MoneticoRetailFound != undefined) {
-            moneticoImmediateCheck = sumImmediateBaskets == MoneticoRetailFound.amount
-            moneticoAmount = MoneticoRetailFound.amount;
-            moneticoStatus = MoneticoRetailFound.moneticoStatus;
-            moneticoPaymentId = MoneticoRetailFound.paymentId
-            remainingMoneticoMap.delete(MoneticoRetailFound.paymentId);
-          } else {
-            moneticoImmediateCheck = "Monetico Not Found";
-            moneticoStatus = "Monetico Not Found";
-            moneticoAmount = "Monetico Not Found";
-            moneticoPaymentId = "Monetico Not Found";
-          }
-
-          let conduent_attributes = searchConduentfromPaymentObj(result_payment, header_attributes, basket_attributes);
-
-          let duplicatePayment = multiplePaymentMap.get(result_payment.orderId) > 1 ? true : false;
-
-          if (header_attributes != undefined) {
-            delete header_attributes.orderId;
-          }
-          if (basket_attributes != undefined) {
-            delete basket_attributes.orderId;
-          }
-          transactions.push({ ...result_payment, ...header_attributes, ...basket_attributes, containsPaymentRegularisation, sumTotalBaskets, sumImmediateBaskets, internalTotalCheck, internalImmediateCheck, moneticoImmediateCheck, duplicatePayment, moneticoStatus, moneticoAmount, moneticoPaymentId, ...conduent_attributes, multiplePaymentElements })
-        } catch (error) {
-          console.error('Something went wrong with orderId:', result_payment.orderId)
-        }
-      })
-
-      console.log(remainingMoneticoMap.size);
-      for (const [key, value] of remainingMoneticoMap.entries()) {
-        let currentRemainingMoneticoTransaction;
-        const payment_attributes = paymentMap.get(value.orderId);
-        if (payment_attributes != undefined) {
-          const header_attributes = headerMap.get(payment_attributes.orderId);
-          const basket_attributes = basketMap.get(payment_attributes.orderId);
-          const conduent_attributes = searchConduentfromPaymentObj(payment_attributes, header_attributes, basket_attributes);
-          let multiplePaymentElements = multipleTentativePaymentMap.get(payment_attributes.orderId) > 1 ? true : false;
-          currentRemainingMoneticoTransaction = {
-            orderId: payment_attributes.orderId,
-            status: header_attributes.status || "",
-            moneticoStatus: value.moneticoStatus,
-            moneticoReference: value.paymentId,
-            paymentRef: payment_attributes.paymentRef,
-            moneticoAmount: value.amount,
-            conduentStatus: conduent_attributes.conduentStatus || "",
-            paymentStatus: payment_attributes.paymentStatus,
-            multiplePaymentElements: multiplePaymentElements
-          };
-          transactions.push({ ...currentRemainingMoneticoTransaction, ...value, ...header_attributes, ...basket_attributes, ...conduent_attributes });
-        } else {
-          currentRemainingMoneticoTransaction = {
-            orderId: "NOT FOUND",
-            moneticoStatus: value.moneticoStatus,
-            moneticoReference: value.paymentId,
-            moneticoAmount: value.amount,
-          };
-          transactions.push({ ...currentRemainingMoneticoTransaction, ...value });
-        }
-      }
-
-
-      const transactionsWithCase = transactions.map(transaction => ({
-        ...transaction,
-        newCase1: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-        newCase2: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'Autre') ? true : false,
-        newCase3: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == true && transaction.conduentStatus == 'Conduent Not Found') ? true : false,
-        newCase4: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentStatus != 'ANN' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-        newCase5: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentTotalCheck == false && transaction.conduentPaymentMode != 'Autre') ? true : false,
-        newCase6: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.paymentRef != "NULL" && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus != 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR' && transaction.conduentPaymentMode == 'Autre') ? true : false,
-        newCase7: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status == 'VALIDATION_ERROR') ? true : false,
-        newCase8: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus != 'Monetico Not Found' && moneticoPaidStatuses.includes(transaction.moneticoStatus) && transaction.conduentStatus == 'Conduent Not Found' && transaction.status != 'VALIDATION_ERROR') ? true : false,
-        newCase9: (transaction.paymentStatus == "SUCCESS" && transaction.duplicatePayment == false && transaction.moneticoStatus == 'Monetico Not Found' && transaction.conduentStatus != 'Conduent Not Found' && transaction.conduentPaymentMode == 'CB') ? true : false,
-        newCase10: (transaction.paymentStatus != "SUCCESS") ? true : false
-      }));
-
-
-      let usecases = [];
-      for (let i = 1; i <= 10; i++) {
-        let stat = transactionsWithCase
-          .filter(item => item[`newCase${i}`] == true)
-          .sort((a, b) => a.paymentDate < b.paymentDate ? 1 : -1);
-        usecases[i] = {
-          usecase: i,
-          occurrences: stat.length,
-          lastDate: stat.length > 0 ? stat[0].paymentDate : "NULL"
-        }
-      }
-
-      fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactionsWithCase));
-      fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[2]), build_stats(usecases));
+    results_monetico_filtered = results_monetico.filter(item => moneticoPaidStatuses.includes(item.status));
+    
+    while (count * percentStep < 100) {
+      let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
+      checkPoints.push({ percent: count * percentStep, paymentRef: results_monetico_filtered[index].paymentId });
+      count++;
     }
+
+    checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
+    headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
+    moneticoRetailMap = new Map(results_monetico.map((item) => [item.paymentId, item]));
+    conduentMap = new Map(results_conduent.map((item) => [item.reference, item]));
+
+
+    results_monetico_filtered.forEach(function (item_monetico) {
+      const findCheckPoint = checkPointMap.get(item_monetico.paymentId);
+      if (findCheckPoint != undefined) {
+        console.log("Réalisé: " + findCheckPoint + "%");
+      }
+
+      try {
+        const conduentMatch = conduentMap.get(item_monetico.paymentId);
+        let result = {
+          orderId: item_monetico.orderId,
+          paymentId: item_monetico.paymentId,
+          moneticoDate: item_monetico.date,
+          moneticoAmount: item_monetico.amount
+        };
+
+        if (conduentMatch != undefined) {
+          if (conduentMatch.conduentStatus == 'ECT') {
+            result.conduentAmount = conduentMatch.amount;
+            result.conduentDate = conduentMatch.date;
+            result.finalResult = "Monetico OK / Conduent OK";
+          } else {
+            result.conduentAmount = conduentMatch.amount;
+            result.conduentDate = conduentMatch.date;
+            result.finalResult = "Monetico OK / Conduent NOK";
+          }
+        } else {
+          result.conduentAmount = "Conduent Not Found";
+          result.conduentDate = "Conduent Not Found";
+          result.finalResult = "Monetico OK / Conduent Not Found";
+        }
+        transactions.push(result);
+      } catch (error) {
+        console.error('Something went wrong with orderId:', item_monetico.orderId)
+      }
+    })
+
+    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactions));
 
     return zipFile
   } catch (error) {
     console.error('Error filtering successful payments:', error);
   }
-}
-
-function searchConduentfromPaymentObj(result_payment, header_attributes, basket_attributes) {
-  let enriched_conduent_attributes = {};
-  if (result_payment.paymentRef != 'NULL') {
-    const ConduentFoundwithMonetico = conduentRefMap.get(result_payment.truncatedPaymentRef);
-
-    if (ConduentFoundwithMonetico != undefined) {
-      enriched_conduent_attributes.conduentTotalCheck = header_attributes.headerTotalAmountWithTax == ConduentFoundwithMonetico.amount;
-      enriched_conduent_attributes.conduentAmount = ConduentFoundwithMonetico.amount;
-      enriched_conduent_attributes.conduentStatus = ConduentFoundwithMonetico.conduentStatus;
-      enriched_conduent_attributes.conduentPaymentMode = ConduentFoundwithMonetico.paymentMode;
-      enriched_conduent_attributes.conduentTransactionNumber = ConduentFoundwithMonetico.reference;
-      enriched_conduent_attributes.conduentIDGCC = ConduentFoundwithMonetico.IDGCC;
-      enriched_conduent_attributes.conduentEmail = ConduentFoundwithMonetico.email;
-    } else {
-      if (basket_attributes != undefined) {
-        const ConduentFoundwithIDGCC = conduentIDGCCMap.get(basket_attributes.providerBasketId + basket_attributes.providerUserId);
-        if (ConduentFoundwithIDGCC != undefined) {
-          enriched_conduent_attributes.conduentTotalCheck = header_attributes.headerTotalAmountWithTax == ConduentFoundwithIDGCC.amount;
-          enriched_conduent_attributes.conduentAmount = ConduentFoundwithIDGCC.amount;
-          enriched_conduent_attributes.conduentStatus = ConduentFoundwithIDGCC.conduentStatus;
-          enriched_conduent_attributes.conduentPaymentMode = ConduentFoundwithIDGCC.paymentMode;
-          enriched_conduent_attributes.conduentTransactionNumber = ConduentFoundwithIDGCC.reference;
-          enriched_conduent_attributes.conduentIDGCC = ConduentFoundwithIDGCC.IDGCC;
-          enriched_conduent_attributes.conduentEmail = ConduentFoundwithIDGCC.email;
-        } else {
-          enriched_conduent_attributes.conduentTotalCheck = "Conduent Not Found";
-          enriched_conduent_attributes.conduentStatus = "Conduent Not Found";
-          enriched_conduent_attributes.conduentAmount = "Conduent Not Found";
-          enriched_conduent_attributes.conduentPaymentMode = "Conduent Not Found";
-          enriched_conduent_attributes.conduentTransactionNumber = "Conduent Not Found";
-          enriched_conduent_attributes.conduentIDGCC = "Conduent Not Found";
-          enriched_conduent_attributes.conduentEmail = "Conduent Not Found";
-        }
-      } else {
-        enriched_conduent_attributes.conduentTotalCheck = "Conduent Not Found";
-        enriched_conduent_attributes.conduentStatus = "Conduent Not Found";
-        enriched_conduent_attributes.conduentAmount = "Conduent Not Found";
-        enriched_conduent_attributes.conduentPaymentMode = "Conduent Not Found";
-        enriched_conduent_attributes.conduentTransactionNumber = "Conduent Not Found";
-        enriched_conduent_attributes.conduentIDGCC = "Conduent Not Found";
-        enriched_conduent_attributes.conduentEmail = "Conduent Not Found";
-      }
-    }
-  } else {
-    enriched_conduent_attributes.conduentTotalCheck = "Conduent Not Found";
-    enriched_conduent_attributes.conduentStatus = "Conduent Not Found";
-    enriched_conduent_attributes.conduentAmount = "Conduent Not Found";
-    enriched_conduent_attributes.conduentPaymentMode = "Conduent Not Found";
-    enriched_conduent_attributes.conduentTransactionNumber = "Conduent Not Found";
-    enriched_conduent_attributes.conduentIDGCC = "Conduent Not Found";
-    enriched_conduent_attributes.conduentEmail = "Conduent Not Found";
-  }
-
-  return enriched_conduent_attributes;
 }
 
 function build_csv(transactions, headers_labels, orderedAttributes) {
@@ -493,92 +228,45 @@ app.listen(port, () => {
 
 app.post('/uploadcsv', upload.fields([
   { name: 'file_header', maxCount: 1 },
-  { name: 'file_basket', maxCount: 1 },
-  { name: 'file_payment', maxCount: 1 },
-  { name: 'file_product', maxCount: 1 },
-  { name: 'file_monetico', maxCount: 1 },
+  { name: 'file_monetico_remisees', maxCount: 1 },
+  { name: 'file_monetico_encours', maxCount: 1 },
   { name: 'file_conduent', maxCount: 1 }
 ]), async (req, res) => {
 
   const headerFile = req.files.file_header ? req.files.file_header[0] : null;
-  const basketFile = req.files.file_basket ? req.files.file_basket[0] : null;
-  const paymentFile = req.files.file_payment ? req.files.file_payment[0] : null;
-  const productFile = req.files.file_product ? req.files.file_product[0] : null;
-  const moneticoFile = req.files.file_monetico ? req.files.file_monetico[0] : null;
+  const moneticoRemiseesFile = req.files.file_monetico_remisees ? req.files.file_monetico_remisees[0] : null;
+  const moneticoEncoursFile = req.files.file_monetico_encours ? req.files.file_monetico_encours[0] : null;
   const conduentFile = req.files.file_conduent ? req.files.file_conduent[0] : null;
-  const requestedOrderId = req.body.orderId ? req.body.orderId : null;
-  const requestedstartPaymentDate = req.body.startPaymentDate ? req.body.startPaymentDate : null;
-  const requestedendPaymentDate = req.body.endPaymentDate ? req.body.endPaymentDate : null;
-  const completeFileToProcess = req.body.complete ? req.body.complete : null;
 
 
 
-  if (headerFile != null && basketFile != null && paymentFile != null && productFile != null) {
+  if (headerFile != null && moneticoRemiseesFile != null && moneticoEncoursFile != null && conduentFile != null) {
 
 
     try {
       await process_headers(headerFile);
-      await process_baskets(basketFile);
-      await process_payments(paymentFile);
-      await process_products(productFile);
+      await process_monetico_retail_remisees(moneticoRemiseesFile);
+      await process_monetico_retail_encours(moneticoEncoursFile);
+      await process_conduent(conduentFile, results_conduent);
 
-      if (moneticoFile != null) {
-        await process_monetico_retail(moneticoFile, results_monetico);
-      }
-      if (conduentFile != null) {
-        await process_conduent(conduentFile, results_conduent);
-      }
+      results_monetico_retail_remisees.splice(0, 1);
+      results_monetico_retail_encours.splice(0, 1);
 
-      if (requestedOrderId != null || requestedstartPaymentDate != null || requestedendPaymentDate != null) {
-        requested_payments = results_payments.filter((item) => {
-          let isValid = true;
 
-          // First filter by requestedOrderId
-          if (requestedOrderId != null) {
-            isValid = isValid && item.orderId == requestedOrderId;
-          }
+      results_monetico = [
+        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId })),
+        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId })),
+      ];
 
-          // Then filter by requestedstartPaymentDate
-          if (requestedstartPaymentDate != null) {
-            isValid = isValid && item.paymentDate > requestedstartPaymentDate + ' 00:00:00';
-          }
 
-          // Then filter by requestedendPaymentDate
-          if (requestedendPaymentDate != null) {
-            isValid = isValid && item.paymentDate < requestedendPaymentDate + ' 00:00:00';
-          }
+      results_conduent.splice(0, 1);
 
-          return isValid;
-        });
+      //Filtre des transactions Conduent à partir du 30/06/2025 13:27:00
+      console.log(results_conduent.length);
+      results_conduent = results_conduent.filter((item) => item.date > '2025-06-30 13:27:00');
+      console.log(results_conduent.length);
 
-        results_monetico_retail.splice(0, 1);
-        requested_results_monetico = results_monetico_retail.filter((item) => {
-          let isValid = true;
-          //let convertedDate = item.date.substring(6) + "-" + item.date.substring(3, 5) + "-" + item.date.substring(0, 2);
-          let convertedDate = item.date;
-          // Then filter by requestedstartPaymentDate
-          if (requestedstartPaymentDate != null) {
-            isValid = isValid && convertedDate > requestedstartPaymentDate;
-          }
-
-          // Then filter by requestedendPaymentDate
-          if (requestedendPaymentDate != null) {
-            isValid = isValid && convertedDate < requestedendPaymentDate;
-          }
-
-          return isValid;
-        });
-      } else {
-        requested_payments = results_payments;
-        requested_results_monetico = results_monetico_retail
-      }
-
-      //Filtre des transactions de paiement-is à partir du 30/06/2025  13:45:00
-      console.log(JSON.stringify(requested_payments.length));
-      requested_payments = requested_payments.filter((item) => item.paymentDate > '2025-06-30 13:45:00');
-      console.log(JSON.stringify(requested_payments.length));
-
-      const zipFile = build_extract(requested_payments, results_headers, results_baskets, results_products, results_monetico_retail, requested_results_monetico, results_conduent, completeFileToProcess);
+      const zipFile = build_extract(results_headers, results_monetico, results_conduent);
 
       const archive = archiver('zip', {
         zlib: { level: 9 }, // Compression level (9 is the maximum)

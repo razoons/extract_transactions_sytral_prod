@@ -12,26 +12,12 @@
     <form action="/uploadcsv" method="post" enctype="multipart/form-data">
         <h3>CSV Header (,)</h3>
         <input type="file" name="file_header" id="file_header" accept=".csv">
-        <h3>CSV Basket (,)</h3>
-        <input type="file" name="file_basket" id="file_basket" accept=".csv">
-        <h3>CSV Payment (,)</h3>
-        <input type="file" name="file_payment" id="file_payment" accept=".csv">
-        <h3>CSV Product (,)</h3>
-        <input type="file" name="file_product" id="file_product" accept=".csv">
-        <h3>CSV Monetico (;)</h3>
-        <input type="file" name="file_monetico" id="file_monetico" accept=".csv">
+        <h3>CSV Monetico_Retail_remisées (;)</h3>
+        <input type="file" name="file_monetico_remisees" id="file_monetico" accept=".csv">
+        <h3>CSV Monetico_Retail_en_cours (;)</h3>
+        <input type="file" name="file_monetico_encours" id="file_monetico" accept=".csv">
         <h3>CSV Conduent (;)</h3>
         <input type="file" name="file_conduent" id="file_conduent" accept=".csv">
-        <h3>Commandes</h3>
-        <input type="text" name="orderId" id="orderId">
-        <h3>Date</h3>
-        <label for="startPaymentDate">Début</label><input type="text" name="startPaymentDate" id="startPaymentDate">
-        <label for="endPaymentDate">Fin</label><input type="text" name="endPaymentDate" id="endPaymentDate">
-        <h3>Quels fichiers générer</h3>
-        <div>
-            <input type="checkbox" id="complete" name="complete" checked />
-            <label for="complete">Transactions complètes</label>
-        </div>
         <br />
         <br />
         <br />
@@ -39,12 +25,6 @@
     </form>
 </body>
 <script>
-    const inputDate = document.getElementById('endPaymentDate');
-    const todayDate = new Date();
-    const year = todayDate.getFullYear();
-    const month = todayDate.getMonth() + 1 > 9 ? todayDate.getMonth() + 1 : "0" + (todayDate.getMonth() + 1);
-    const date = todayDate.getDate() > 9 ? todayDate.getDate() : "0" + todayDate.getDate();
-    inputDate.value = year + '-' + month + '-' + date;
 </script>
 
 </html>
