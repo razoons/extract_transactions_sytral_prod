@@ -135,7 +135,8 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     let zipFile = [
       'transactions_completes.csv'
     ];
-    let moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
+    const moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
+    const conduentValidatedStatuses = ['PEC', 'ECT'];
 
     console.log('Début de la construction du fichier des transactions complètes');
     let transactions = [];
@@ -144,7 +145,10 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     let checkPoints = [];
 
     results_monetico_filtered = results_monetico.filter(item => moneticoPaidStatuses.includes(item.status));
-    let remaining_results_conduent=results_conduent;
+    let remaining_results_conduent = results_conduent.filter(item => conduentValidatedStatuses.includes(item.conduentStatus));
+    let remaining_results_conduent_map = new Map(
+      remaining_results_conduent.map(item => [item.reference, item])
+    );
 
     while (count * percentStep < 100) {
       let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
@@ -174,18 +178,22 @@ function build_extract(results_headers, results_monetico, results_conduent) {
         };
 
         if (conduentMatch != undefined) {
-          if (conduentMatch.conduentStatus == 'ECT') {
+          if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
             result.conduentAmount = conduentMatch.amount;
             result.conduentDate = conduentMatch.date;
+            result.conduentStatus = conduentMatch.conduentStatus;
             result.finalResult = "Monetico OK / Conduent OK";
           } else {
             result.conduentAmount = conduentMatch.amount;
             result.conduentDate = conduentMatch.date;
+            result.conduentStatus = conduentMatch.conduentStatus;
             result.finalResult = "Monetico OK / Conduent NOK";
           }
+          remaining_results_conduent_map.delete(item_monetico.paymentId);
         } else {
           result.conduentAmount = "Conduent Not Found";
           result.conduentDate = "Conduent Not Found";
+          result.conduentStatus = "Conduent Not Found";
           result.finalResult = "Monetico OK / Conduent Not Found";
         }
         transactions.push(result);
@@ -193,6 +201,25 @@ function build_extract(results_headers, results_monetico, results_conduent) {
         console.error('Something went wrong with orderId:', item_monetico.orderId)
       }
     })
+
+    console.log(remaining_results_conduent_map.size);
+    for (const [key, value] of remaining_results_conduent_map.entries()) {
+      if (value.amount != "0") {
+        let result = {
+          orderId: "Monetico Not Found",
+          paymentId: value.reference,
+          conduentDate: value.date,
+          conduentAmount: value.amount,
+          conduentStatus: value.conduentStatus,
+          moneticoDate: "Monetico Not Found",
+          moneticoAmount: "Monetico Not Found",
+          finalResult: "Monetico Not Found / Conduent OK"
+        }
+        transactions.push(result);
+      }
+    }
+
+
 
     fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactions));
 
@@ -256,14 +283,8 @@ app.post('/uploadcsv', upload.fields([
       results_monetico_retail_remisees.splice(0, 1);
       results_monetico_retail_encours.splice(0, 1);
 
-
-      results_monetico = [
-        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId })),
-        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId })),
-      ];
-
       if (requestedstartPaymentDate != null || requestedendPaymentDate != null) {
-        results_monetico = results_monetico.filter((item) => {
+        results_monetico_retail_encours = results_monetico_retail_encours.filter((item) => {
           let isValid = true;
 
           // Then filter by requestedstartPaymentDate
@@ -279,6 +300,11 @@ app.post('/uploadcsv', upload.fields([
           return isValid;
         });
       }
+
+      results_monetico = [
+        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId })),
+        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId })),
+      ];
 
 
       results_conduent.splice(0, 1);

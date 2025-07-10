@@ -7,6 +7,7 @@
             "Montant Monetico",
             "Date de paiement Conduent",
             "Montant Conduent",
+            "Statut Conduent",
             "Statut script"
         ],
         "orderedAttributes": [
@@ -16,6 +17,7 @@
             "moneticoAmount",
             "conduentDate",
             "conduentAmount",
+            "conduentStatus",
             "finalResult"
         ]
     }, 
