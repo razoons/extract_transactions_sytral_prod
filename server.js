@@ -130,13 +130,12 @@ async function process_conduent(conduentFile) {
 }
 
 function build_extract(results_headers, results_monetico, results_conduent) {
-  console.log("check");
   try {
     let zipFile = [
-      'transactions_completes.csv'
+      'transactions_nouveaux_rapport.csv'
     ];
     const moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
-    const conduentValidatedStatuses = ['PEC', 'ECT'];
+    const conduentValidatedStatuses = ['ECT'];
 
     console.log('Début de la construction du fichier des transactions complètes');
     let transactions = [];
@@ -206,14 +205,22 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     for (const [key, value] of remaining_results_conduent_map.entries()) {
       if (value.amount != "0") {
         let result = {
-          orderId: "Monetico Not Found",
           paymentId: value.reference,
           conduentDate: value.date,
           conduentAmount: value.amount,
-          conduentStatus: value.conduentStatus,
-          moneticoDate: "Monetico Not Found",
-          moneticoAmount: "Monetico Not Found",
-          finalResult: "Monetico Not Found / Conduent OK"
+          conduentStatus: value.conduentStatus
+        }
+        const resultMoneticoFound = moneticoRetailMap.get(value.reference);
+        if (resultMoneticoFound != undefined) {
+          result.orderId = resultMoneticoFound.orderId;
+          result.moneticoDate = resultMoneticoFound.date;
+          result.moneticoAmount = resultMoneticoFound.amount;
+          result.finalResult = "Monetico KO / Conduent OK";
+        } else {
+          result.orderId = "Monetico Not Found";
+          result.moneticoDate = "Monetico Not Found";
+          result.moneticoAmount = "Monetico Not Found";
+          result.finalResult = "Monetico Not Found / Conduent OK";
         }
         transactions.push(result);
       }
