@@ -3,11 +3,18 @@
         "headers_labels": [
             "Commande",
             "Payment Id",
-            "Date de paiement Monetico",
+            "Date de remise Monetico",
             "Montant Monetico",
             "Date de paiement Conduent",
             "Montant Conduent",
+            "Email Conduent",
+            "IDGCC Conduent",
+            "Moyen de paiement Conduent",
             "Statut Conduent",
+            "Statut IS",
+            "Verification Conduent",
+            "Verification Monetico",
+            "Verification IS",
             "Statut script"
         ],
         "orderedAttributes": [
@@ -17,36 +24,15 @@
             "moneticoAmount",
             "conduentDate",
             "conduentAmount",
+            "email",
+            "idgcc",
+            "paymentMode",
             "conduentStatus",
+            "headerStatus",
+            "conduentCheck",
+            "moneticoCheck",
+            "isCheck",
             "finalResult"
-        ]
-    }, 
-    "callbackKO": {
-        "headers_labels": [
-            "IS-Commande",
-            "IS-Statut commande",
-            "IS-Reference paiement",
-            "Monetico-Statut",
-            "Date"
-        ],
-        "orderedAttributes": [
-            "orderId",
-            "status",
-            "ref",
-            "moneticoStatus",
-            "date"
-        ]
-    },
-    "stats": {
-        "headers_labels": [
-            "Usecase",
-            "Nombre d'occurrences",
-            "Dernière date de paiement"
-        ],
-        "orderedAttributes": [
-            "usecase",
-            "occurrences",
-            "lastDate"
         ]
     }
 }

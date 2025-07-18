@@ -29,13 +29,9 @@ let results_monetico_retail_remisees = [];
 let results_monetico_retail_encours = [];
 let results_monetico = [];
 let results_conduent = [];
-let requested_results_monetico = [];
 let checkPointMap;
 let headerMap;
-let monetico_remiseesMap;
-let monetico_encoursMap;
 let conduentMap;
-let successResultsPayments = [];
 
 async function process_headers(headerFile) {
   return new Promise((resolve, reject) => {
@@ -136,6 +132,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     ];
     const moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
     const conduentValidatedStatuses = ['ECT'];
+    const headerValidatedStatuses = ['VALIDATED', 'FINALIZED'];
 
     console.log('Début de la construction du fichier des transactions complètes');
     let transactions = [];
@@ -157,6 +154,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
 
     checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
     headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
+    headerMap2 = new Map(results_headers.map((item) => [item.paymentId, item]));
     moneticoRetailMap = new Map(results_monetico.map((item) => [item.paymentId, item]));
     conduentMap = new Map(results_conduent.map((item) => [item.reference, item]));
 
@@ -168,33 +166,70 @@ function build_extract(results_headers, results_monetico, results_conduent) {
       }
 
       try {
-        const conduentMatch = conduentMap.get(item_monetico.paymentId);
+
         let result = {
           orderId: item_monetico.orderId,
           paymentId: item_monetico.paymentId,
           moneticoDate: item_monetico.date,
-          moneticoAmount: item_monetico.amount
+          moneticoAmount: item_monetico.amount,
+          moneticoCheck: "OK",
+          finalResult: "OK"
         };
+
+
+        //Récupération des données Conduent
+        const conduentMatch = conduentMap.get(item_monetico.paymentId);
 
         if (conduentMatch != undefined) {
           if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
             result.conduentAmount = conduentMatch.amount;
             result.conduentDate = conduentMatch.date;
             result.conduentStatus = conduentMatch.conduentStatus;
-            result.finalResult = "Monetico OK / Conduent OK";
+            result.email = conduentMatch.email;
+            result.idgcc = conduentMatch.IDGCC;
+            result.paymentMode = conduentMatch.paymentMode;
+            result.conduentCheck = "OK";
           } else {
             result.conduentAmount = conduentMatch.amount;
             result.conduentDate = conduentMatch.date;
             result.conduentStatus = conduentMatch.conduentStatus;
-            result.finalResult = "Monetico OK / Conduent NOK";
+            result.email = conduentMatch.email;
+            result.idgcc = conduentMatch.IDGCC;
+            result.paymentMode = conduentMatch.paymentMode;
+            result.conduentCheck = "Mauvais Statut";
+            result.finalResult = "KO";
           }
           remaining_results_conduent_map.delete(item_monetico.paymentId);
         } else {
           result.conduentAmount = "Conduent Not Found";
           result.conduentDate = "Conduent Not Found";
           result.conduentStatus = "Conduent Not Found";
-          result.finalResult = "Monetico OK / Conduent Not Found";
+          result.email = "Conduent Not Found";
+          result.idgcc = "Conduent Not Found";
+          result.paymentMode = "Conduent Not Found";
+          result.conduentCheck = "Commande introuvable";
+          result.finalResult = "KO";
         }
+
+
+        //Récupération des données du Header
+        const headerMatch = headerMap.get(item_monetico.orderId);
+
+        if (headerMatch != undefined) {
+          if (headerValidatedStatuses.includes(headerMatch.status)) {
+            result.headerStatus = headerMatch.status;
+            result.isCheck = "OK";
+          } else {
+            result.headerStatus = headerMatch.status;
+            result.isCheck = "Mauvais Statut";
+            result.finalResult = "KO";
+          }
+        } else {
+          result.headerStatus = "IS Not Found";
+          result.isCheck = "Commande introuvable";
+          result.finalResult = "KO";
+        }
+
         transactions.push(result);
       } catch (error) {
         console.error('Something went wrong with orderId:', item_monetico.orderId)
@@ -208,19 +243,48 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           paymentId: value.reference,
           conduentDate: value.date,
           conduentAmount: value.amount,
-          conduentStatus: value.conduentStatus
+          conduentStatus: value.conduentStatus,
+          email: value.email,
+          idgcc: value.IDGCC,
+          paymentMode: value.paymentMode,
+          conduentCheck: "OK",
+          finalResult: "OK"
         }
+
+        //Récupération des données Monetico
         const resultMoneticoFound = moneticoRetailMap.get(value.reference);
+
         if (resultMoneticoFound != undefined) {
           result.orderId = resultMoneticoFound.orderId;
           result.moneticoDate = resultMoneticoFound.date;
           result.moneticoAmount = resultMoneticoFound.amount;
-          result.finalResult = "Monetico KO / Conduent OK";
+          result.moneticoCheck = "Mauvais Statut";
+          result.finalResult = "KO";
         } else {
           result.orderId = "Monetico Not Found";
           result.moneticoDate = "Monetico Not Found";
           result.moneticoAmount = "Monetico Not Found";
-          result.finalResult = "Monetico Not Found / Conduent OK";
+          result.moneticoCheck = "Commande introuvable";
+          result.finalResult = "KO";
+        }
+
+
+        //Récupération des données du Header
+        const headerMatch = headerMap2.get(value.reference);
+
+        if (headerMatch != undefined) {
+          if (headerValidatedStatuses.includes(headerMatch.status)) {
+            result.headerStatus = headerMatch.status;
+            result.isCheck = "OK";
+          } else {
+            result.headerStatus = headerMatch.status;
+            result.isCheck = "Mauvais Statut";
+            result.finalResult = "KO";
+          }
+        } else {
+          result.headerStatus = "IS Not Found";
+          result.isCheck = "Commande introuvable";
+          result.finalResult = "KO";
         }
         transactions.push(result);
       }
