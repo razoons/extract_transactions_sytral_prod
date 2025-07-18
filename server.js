@@ -304,6 +304,27 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           result.finalResult = "KO";
         }
 
+
+        //Récupération des données du basket
+        const basketMatch = basketMap.get(item_monetico.orderId);
+
+        if (basketMatch != undefined) {
+          result.supportId = basketMatch.supportId;
+        } else {
+          result.supportId = "IS Not Found";
+          result.finalResult = "KO";
+        }
+
+        //Récupération des données du product
+        const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
+
+        if (productMatch.length > 0) {
+          result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
+        } else {
+          result.isRegul = "IS Not Found";
+          result.finalResult = "KO";
+        }
+
         transactions.push(result);
       } catch (error) {
         console.error('Something went wrong with orderId:', item_monetico.orderId)
@@ -368,6 +389,28 @@ function build_extract(results_headers, results_monetico, results_conduent) {
               result.isCheck = "Mauvais Statut";
               result.finalResult = "KO";
             }
+
+
+            //Récupération des données du basket
+            const basketMatch = basketMap.get(foundOrderId);
+
+            if (basketMatch != undefined) {
+              result.supportId = basketMatch.supportId;
+            } else {
+              result.supportId = "IS Not Found";
+              result.finalResult = "KO";
+            }
+
+            //Récupération des données du product
+            const productMatch = Object.assign([], results_products.filter((item) => item.orderId == foundOrderId));
+
+            if (productMatch.length > 0) {
+              result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
+            } else {
+              result.isRegul = "IS Not Found";
+              result.finalResult = "KO";
+            }
+
           } else {
             result.headerStatus = "IS Not Found";
             result.isCheck = "Commande introuvable";
