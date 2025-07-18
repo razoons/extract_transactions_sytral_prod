@@ -25,6 +25,9 @@ app.get('/', (req, res) => {
 });
 
 let results_headers = [];
+let results_baskets = [];
+let results_payments = [];
+let results_products = [];
 let results_monetico_retail_remisees = [];
 let results_monetico_retail_encours = [];
 let results_monetico = [];
@@ -53,6 +56,75 @@ async function process_headers(headerFile) {
         console.error('Error reading the CSV file:', error);
         reject(error); // Reject the promise if there's an error
       });
+  })
+}
+
+async function process_baskets(basketFile) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(basketFile.path)
+      .pipe(csv({ headers: ['orderId', , , 'providerBasketId', , 'providerUserId', 'supportId', , , , , , , , , , , , , , , , , , , , , , 'basketEmail'], separator: ',' }))
+      .on('data', (data) => {
+
+        const { orderId, providerBasketId, providerUserId, supportId, basketEmail } = data;
+
+        results_baskets.push({ orderId, providerBasketId, providerUserId, supportId, basketEmail });
+      })
+      .on('end', () => {
+        console.log(`Data has been converted and saved`);
+        resolve(); // Resolve the promise when the reading is complete
+      })
+      .on('error', (error) => {
+        console.error('Error reading the CSV file:', error);
+        reject(error); // Reject the promise if there's an error
+      });
+
+  })
+}
+
+async function process_payments(paymentFile) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(paymentFile.path)
+      .pipe(csv({ headers: ['orderId', , , , "paymentAmountWithTax", "paymentStatus", "paymentRef", "paymentDate", "paymentSEPARef"], separator: ',' }))
+      .on('data', (data) => {
+
+        const { orderId, paymentStatus, paymentRef, paymentDate, paymentSEPARef } = data;
+        const paymentAmountWithTax = Math.round(parseFloat(data.paymentAmountWithTax) * 100) / 100;
+        const findSeparatorforRef = paymentRef.indexOf("$");
+        const truncatedPaymentRef = findSeparatorforRef != -1 ? paymentRef.substring(0, findSeparatorforRef) : paymentRef;
+        results_payments.push({ orderId, paymentAmountWithTax, paymentStatus, paymentRef, truncatedPaymentRef, paymentDate, paymentSEPARef });
+      })
+      .on('end', () => {
+        console.log(`Data has been converted and saved`);
+        resolve(); // Resolve the promise when the reading is complete
+      })
+      .on('error', (error) => {
+        console.error('Error reading the CSV file:', error);
+        reject(error); // Reject the promise if there's an error
+      });
+
+  })
+}
+
+async function process_products(productFile) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(productFile.path)
+      .pipe(csv({ headers: ['orderId', 'basketLine', , 'productId', , , , , , , , , , , , 'productTotalAmountWithTax', , , , , , , , , , , , , , , , 'productProviderBasketId', 'productImmediateAmountWithTax'], separator: ',' }))
+      .on('data', (data) => {
+
+        const { orderId, basketLine, productProviderBasketId, productId } = data;
+        const productTotalAmountWithTax = Math.round(parseFloat(data.productTotalAmountWithTax) * 100) / 100;
+        const productImmediateAmountWithTax = Math.round(parseFloat(data.productImmediateAmountWithTax) * 100) / 100;
+        results_products.push({ orderId, basketLine, productTotalAmountWithTax, productImmediateAmountWithTax, productProviderBasketId, productId });
+      })
+      .on('end', () => {
+        console.log(`Data has been converted and saved`);
+        resolve(); // Resolve the promise when the reading is complete
+      })
+      .on('error', (error) => {
+        console.error('Error reading the CSV file:', error);
+        reject(error); // Reject the promise if there's an error
+      });
+
   })
 }
 
@@ -154,7 +226,9 @@ function build_extract(results_headers, results_monetico, results_conduent) {
 
     checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
     headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
-    headerMap2 = new Map(results_headers.map((item) => [item.paymentId, item]));
+    basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
+    paymentMap = new Map(results_payments.map((item) => [item.paymentRef, item]));
+    productMap = new Map(results_products.map((item) => [item.orderId, item]));
     moneticoRetailMap = new Map(results_monetico.map((item) => [item.paymentId, item]));
     conduentMap = new Map(results_conduent.map((item) => [item.reference, item]));
 
@@ -236,7 +310,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
       }
     })
 
-    console.log(remaining_results_conduent_map.size);
     for (const [key, value] of remaining_results_conduent_map.entries()) {
       if (value.amount != "0") {
         let result = {
@@ -268,24 +341,40 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           result.finalResult = "KO";
         }
 
+        //Récupération des données du Payment
+        const paymentMatch = paymentMap.get(value.reference);
+
+        let foundOrderId = null;
+
+        if (paymentMatch != undefined) {
+          foundOrderId = paymentMatch.orderId;
+        }
 
         //Récupération des données du Header
-        const headerMatch = headerMap2.get(value.reference);
 
-        if (headerMatch != undefined) {
-          if (headerValidatedStatuses.includes(headerMatch.status)) {
-            result.headerStatus = headerMatch.status;
-            result.isCheck = "OK";
+        //init
+        result.headerStatus = "IS Not Found";
+        result.isCheck = "Commande introuvable";
+        result.finalResult = "KO";
+
+        if (foundOrderId != null) {
+          const headerMatch = headerMap.get(foundOrderId);
+          if (headerMatch != undefined) {
+            if (headerValidatedStatuses.includes(headerMatch.status)) {
+              result.headerStatus = headerMatch.status;
+              result.isCheck = "OK";
+            } else {
+              result.headerStatus = headerMatch.status;
+              result.isCheck = "Mauvais Statut";
+              result.finalResult = "KO";
+            }
           } else {
-            result.headerStatus = headerMatch.status;
-            result.isCheck = "Mauvais Statut";
+            result.headerStatus = "IS Not Found";
+            result.isCheck = "Commande introuvable";
             result.finalResult = "KO";
           }
-        } else {
-          result.headerStatus = "IS Not Found";
-          result.isCheck = "Commande introuvable";
-          result.finalResult = "KO";
         }
+
         transactions.push(result);
       }
     }
@@ -329,12 +418,18 @@ app.listen(port, () => {
 
 app.post('/uploadcsv', upload.fields([
   { name: 'file_header', maxCount: 1 },
+  { name: 'file_basket', maxCount: 1 },
+  { name: 'file_payment', maxCount: 1 },
+  { name: 'file_product', maxCount: 1 },
   { name: 'file_monetico_remisees', maxCount: 1 },
   { name: 'file_monetico_encours', maxCount: 1 },
   { name: 'file_conduent', maxCount: 1 }
 ]), async (req, res) => {
 
   const headerFile = req.files.file_header ? req.files.file_header[0] : null;
+  const basketFile = req.files.file_basket ? req.files.file_basket[0] : null;
+  const paymentFile = req.files.file_payment ? req.files.file_payment[0] : null;
+  const productFile = req.files.file_product ? req.files.file_product[0] : null;
   const moneticoRemiseesFile = req.files.file_monetico_remisees ? req.files.file_monetico_remisees[0] : null;
   const moneticoEncoursFile = req.files.file_monetico_encours ? req.files.file_monetico_encours[0] : null;
   const conduentFile = req.files.file_conduent ? req.files.file_conduent[0] : null;
@@ -347,6 +442,9 @@ app.post('/uploadcsv', upload.fields([
 
     try {
       await process_headers(headerFile);
+      await process_baskets(basketFile);
+      await process_payments(paymentFile);
+      await process_products(productFile);
       await process_monetico_retail_remisees(moneticoRemiseesFile);
       await process_monetico_retail_encours(moneticoEncoursFile);
       await process_conduent(conduentFile, results_conduent);
