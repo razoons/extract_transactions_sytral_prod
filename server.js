@@ -154,13 +154,13 @@ async function process_monetico_retail_remisees(moneticoRemiseesFile) {
 async function process_monetico_retail_encours(moneticoEncoursFile) {
   return new Promise((resolve, reject) => {
     fs.createReadStream(moneticoEncoursFile.path)
-      .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , , , , , , , 'paymentId'], separator: ';' }))
+      .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , 'type', , , , , , 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, status, paymentId } = data;
+        const { orderId, status, paymentId, type } = data;
         const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount);
-        results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId });
+        results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId, type });
       })
       .on('end', () => {
         console.log(`Data has been converted and saved`);
@@ -224,7 +224,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
       count++;
     }
 
-    checkPointMap = new Map(checkPoints.map((item) => [item.orderId, item.percent]));
+    checkPointMap = new Map(checkPoints.map((item) => [item.paymentRef, item.percent]));
     headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
     basketMap = new Map(results_baskets.map((item) => [item.orderId, item]));
     paymentMap = new Map(results_payments.map((item) => [item.paymentRef, item]));
@@ -239,100 +239,115 @@ function build_extract(results_headers, results_monetico, results_conduent) {
         console.log("Réalisé: " + findCheckPoint + "%");
       }
 
-      try {
+      if (item_monetico.type == "Débit") {
 
-        let result = {
-          orderId: item_monetico.orderId,
-          paymentId: item_monetico.paymentId,
-          moneticoDate: item_monetico.date,
-          moneticoAmount: item_monetico.amount,
-          moneticoCheck: "OK",
-          finalResult: "OK"
-        };
+        try {
+
+          let result = {
+            orderId: item_monetico.orderId,
+            paymentId: item_monetico.paymentId,
+            moneticoDate: item_monetico.date,
+            moneticoAmount: item_monetico.amount,
+            isRefund: false,
+            moneticoCheck: "OK",
+            finalResult: "OK"
+          };
 
 
-        //Récupération des données Conduent
-        const conduentMatch = conduentMap.get(item_monetico.paymentId);
+          //Récupération des données Conduent
+          const conduentMatch = conduentMap.get(item_monetico.paymentId);
 
-        if (conduentMatch != undefined) {
-          if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
-            result.conduentAmount = conduentMatch.amount;
-            result.conduentDate = conduentMatch.date;
-            result.conduentStatus = conduentMatch.conduentStatus;
-            result.email = conduentMatch.email;
-            result.idgcc = conduentMatch.IDGCC;
-            result.paymentMode = conduentMatch.paymentMode;
-            result.conduentCheck = "OK";
+          if (conduentMatch != undefined) {
+            if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
+              result.conduentAmount = conduentMatch.amount;
+              result.conduentDate = conduentMatch.date;
+              result.conduentStatus = conduentMatch.conduentStatus;
+              result.email = conduentMatch.email;
+              result.idgcc = conduentMatch.IDGCC;
+              result.paymentMode = conduentMatch.paymentMode;
+              result.conduentCheck = "OK";
+            } else {
+              result.conduentAmount = conduentMatch.amount;
+              result.conduentDate = conduentMatch.date;
+              result.conduentStatus = conduentMatch.conduentStatus;
+              result.email = conduentMatch.email;
+              result.idgcc = conduentMatch.IDGCC;
+              result.paymentMode = conduentMatch.paymentMode;
+              result.conduentCheck = "Mauvais Statut";
+              result.finalResult = "KO";
+            }
+            remaining_results_conduent_map.delete(item_monetico.paymentId);
           } else {
-            result.conduentAmount = conduentMatch.amount;
-            result.conduentDate = conduentMatch.date;
-            result.conduentStatus = conduentMatch.conduentStatus;
-            result.email = conduentMatch.email;
-            result.idgcc = conduentMatch.IDGCC;
-            result.paymentMode = conduentMatch.paymentMode;
-            result.conduentCheck = "Mauvais Statut";
+            result.conduentAmount = "Conduent Not Found";
+            result.conduentDate = "Conduent Not Found";
+            result.conduentStatus = "Conduent Not Found";
+            result.email = "Conduent Not Found";
+            result.idgcc = "Conduent Not Found";
+            result.paymentMode = "Conduent Not Found";
+            result.conduentCheck = "Commande introuvable";
             result.finalResult = "KO";
           }
-          remaining_results_conduent_map.delete(item_monetico.paymentId);
-        } else {
-          result.conduentAmount = "Conduent Not Found";
-          result.conduentDate = "Conduent Not Found";
-          result.conduentStatus = "Conduent Not Found";
-          result.email = "Conduent Not Found";
-          result.idgcc = "Conduent Not Found";
-          result.paymentMode = "Conduent Not Found";
-          result.conduentCheck = "Commande introuvable";
-          result.finalResult = "KO";
-        }
 
 
-        //Récupération des données du Header
-        const headerMatch = headerMap.get(item_monetico.orderId);
+          //Récupération des données du Header
+          const headerMatch = headerMap.get(item_monetico.orderId);
 
-        if (headerMatch != undefined) {
-          if (headerValidatedStatuses.includes(headerMatch.status)) {
-            result.headerStatus = headerMatch.status;
-            result.isCheck = "OK";
+          if (headerMatch != undefined) {
+            if (headerValidatedStatuses.includes(headerMatch.status)) {
+              result.headerStatus = headerMatch.status;
+              result.isCheck = "OK";
+            } else {
+              result.headerStatus = headerMatch.status;
+              result.isCheck = "Mauvais Statut";
+              result.finalResult = "KO";
+            }
           } else {
-            result.headerStatus = headerMatch.status;
-            result.isCheck = "Mauvais Statut";
+            result.headerStatus = "IS Not Found";
+            result.isCheck = "Commande introuvable";
             result.finalResult = "KO";
           }
-        } else {
-          result.headerStatus = "IS Not Found";
-          result.isCheck = "Commande introuvable";
-          result.finalResult = "KO";
+
+
+          //Récupération des données du basket
+          const basketMatch = basketMap.get(item_monetico.orderId);
+
+          if (basketMatch != undefined) {
+            result.supportId = basketMatch.supportId;
+          } else {
+            result.supportId = "IS Not Found";
+            result.finalResult = "KO";
+          }
+
+          //Récupération des données du product
+          const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
+
+          if (productMatch.length > 0) {
+            result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
+          } else {
+            result.isRegul = "IS Not Found";
+            result.finalResult = "KO";
+          }
+
+          transactions.push(result);
+        } catch (error) {
+          console.error('Something went wrong with orderId:', item_monetico.orderId)
         }
-
-
-        //Récupération des données du basket
-        const basketMatch = basketMap.get(item_monetico.orderId);
-
-        if (basketMatch != undefined) {
-          result.supportId = basketMatch.supportId;
-        } else {
-          result.supportId = "IS Not Found";
-          result.finalResult = "KO";
+      } else if (item_monetico.type == "Crédit") {
+        try {
+          const foundTransaction = transactions.find(item => ((item.orderId == item_monetico.orderId) && (item.paymentId != item_monetico.paymentId)));
+          if (foundTransaction) {
+            foundTransaction.isRefund = true;
+            foundTransaction.finalResult = "OK";
+            foundTransaction.isCheck = "OK";
+          }
+        } catch (error) {
+          console.error('Something went wrong with refund', item_monetico.orderId)
         }
-
-        //Récupération des données du product
-        const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
-
-        if (productMatch.length > 0) {
-          result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
-        } else {
-          result.isRegul = "IS Not Found";
-          result.finalResult = "KO";
-        }
-
-        transactions.push(result);
-      } catch (error) {
-        console.error('Something went wrong with orderId:', item_monetico.orderId)
       }
     })
 
     for (const [key, value] of remaining_results_conduent_map.entries()) {
-      if (value.amount != "0") {
+      if ((value.amount != "0") && (value.paymentMode == "CB")) {
         let result = {
           paymentId: value.reference,
           conduentDate: value.date,
@@ -341,6 +356,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           email: value.email,
           idgcc: value.IDGCC,
           paymentMode: value.paymentMode,
+          isRefund: false,
           conduentCheck: "OK",
           finalResult: "OK"
         }
@@ -418,6 +434,19 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           }
         }
 
+        transactions.push(result);
+      } else if (value.paymentMode != "CB") {
+        let result = {
+          paymentId: value.reference,
+          conduentDate: value.date,
+          conduentAmount: value.amount,
+          conduentStatus: value.conduentStatus,
+          email: value.email,
+          idgcc: value.IDGCC,
+          paymentMode: value.paymentMode,
+          conduentCheck: "OK",
+          finalResult: "OK"
+        }
         transactions.push(result);
       }
     }
@@ -514,8 +543,8 @@ app.post('/uploadcsv', upload.fields([
       }
 
       results_monetico = [
-        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId })),
-        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId })),
+        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
 
