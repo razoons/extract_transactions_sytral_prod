@@ -49,7 +49,7 @@ async function process_headers(headerFile) {
         results_headers.push({ orderId, creationDate, updateDate, status, headerTotalAmountWithTax, headerImmediateAmountWithTax, headerEmail });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier headers traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -70,7 +70,7 @@ async function process_baskets(basketFile) {
         results_baskets.push({ orderId, providerBasketId, providerUserId, supportId, basketEmail });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier baskets traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -94,7 +94,7 @@ async function process_payments(paymentFile) {
         results_payments.push({ orderId, paymentAmountWithTax, paymentStatus, paymentRef, truncatedPaymentRef, paymentDate, paymentSEPARef });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier payments traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -117,7 +117,7 @@ async function process_products(productFile) {
         results_products.push({ orderId, basketLine, productTotalAmountWithTax, productImmediateAmountWithTax, productProviderBasketId, productId });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier products traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -140,7 +140,7 @@ async function process_monetico_retail_remisees(moneticoRemiseesFile) {
         results_monetico_retail_remisees.push({ orderId, amount, type, date, paymentId });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier monetico_remisees traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -163,7 +163,7 @@ async function process_monetico_retail_encours(moneticoEncoursFile) {
         results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId, type });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier monetico_encours traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -186,7 +186,7 @@ async function process_conduent(conduentFile) {
         results_conduent.push({ reference, conduentStatus, date, amount, userCode, paymentMode, email, IDGCC });
       })
       .on('end', () => {
-        console.log(`Data has been converted and saved`);
+        console.log(`Fichier conduent traité avec succès`);
         resolve(); // Resolve the promise when the reading is complete
       })
       .on('error', (error) => {
@@ -204,7 +204,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     ];
     const moneticoPaidStatuses = ['En attente de remise', 'Remisée'];
     const conduentValidatedStatuses = ['ECT'];
-    const headerValidatedStatuses = ['VALIDATED', 'FINALIZED'];
+    const headerValidatedStatuses = ['VALIDATED', 'FINALIZED', 'PAYMENT_CONFIRMED'];
 
     console.log('Début de la construction du fichier des transactions complètes');
     let transactions = [];
@@ -214,9 +214,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
 
     results_monetico_filtered = results_monetico.filter(item => moneticoPaidStatuses.includes(item.status));
     let remaining_results_conduent = results_conduent.filter(item => conduentValidatedStatuses.includes(item.conduentStatus));
-    let remaining_results_conduent_map = new Map(
-      remaining_results_conduent.map(item => [item.reference, item])
-    );
 
     while (count * percentStep < 100) {
       let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
@@ -248,6 +245,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             paymentId: item_monetico.paymentId,
             moneticoDate: item_monetico.date,
             moneticoAmount: item_monetico.amount,
+            moneticoStatus: item_monetico.status,
             isRefund: false,
             moneticoCheck: "OK",
             finalResult: "OK"
@@ -276,7 +274,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
               result.conduentCheck = "Mauvais Statut";
               result.finalResult = "KO";
             }
-            remaining_results_conduent_map.delete(item_monetico.paymentId);
+            remaining_results_conduent = remaining_results_conduent.filter(item => item.reference != item_monetico.paymentId);
           } else {
             result.conduentAmount = "Conduent Not Found";
             result.conduentDate = "Conduent Not Found";
@@ -328,7 +326,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             result.finalResult = "KO";
           }
 
-          transactions.push(result);
+          transactions.push(convertNumber(result));
         } catch (error) {
           console.error('Something went wrong with orderId:', item_monetico.orderId)
         }
@@ -346,40 +344,42 @@ function build_extract(results_headers, results_monetico, results_conduent) {
       }
     })
 
-    for (const [key, value] of remaining_results_conduent_map.entries()) {
-      if ((value.amount != "0") && (value.paymentMode == "CB")) {
+    remaining_results_conduent.forEach(transaction => {
+      if ((transaction.amount != "0") && (transaction.paymentMode == "CB")) {
         let result = {
-          paymentId: value.reference,
-          conduentDate: value.date,
-          conduentAmount: value.amount,
-          conduentStatus: value.conduentStatus,
-          email: value.email,
-          idgcc: value.IDGCC,
-          paymentMode: value.paymentMode,
+          paymentId: transaction.reference,
+          conduentDate: transaction.date,
+          conduentAmount: transaction.amount,
+          conduentStatus: transaction.conduentStatus,
+          email: transaction.email,
+          idgcc: transaction.IDGCC,
+          paymentMode: transaction.paymentMode,
           isRefund: false,
           conduentCheck: "OK",
           finalResult: "OK"
         }
 
         //Récupération des données Monetico
-        const resultMoneticoFound = moneticoRetailMap.get(value.reference);
+        const resultMoneticoFound = moneticoRetailMap.get(transaction.reference);
 
         if (resultMoneticoFound != undefined) {
           result.orderId = resultMoneticoFound.orderId;
           result.moneticoDate = resultMoneticoFound.date;
           result.moneticoAmount = resultMoneticoFound.amount;
-          result.moneticoCheck = "Mauvais Statut";
+          result.moneticoStatus = resultMoneticoFound.status,
+            result.moneticoCheck = "Mauvais Statut";
           result.finalResult = "KO";
         } else {
           result.orderId = "Monetico Not Found";
           result.moneticoDate = "Monetico Not Found";
           result.moneticoAmount = "Monetico Not Found";
+          result.moneticoStatus = "Monetico Not Found";
           result.moneticoCheck = "Commande introuvable";
           result.finalResult = "KO";
         }
 
         //Récupération des données du Payment
-        const paymentMatch = paymentMap.get(value.reference);
+        const paymentMatch = paymentMap.get(transaction.reference);
 
         let foundOrderId = null;
 
@@ -434,31 +434,41 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           }
         }
 
-        transactions.push(result);
-      } else if (value.paymentMode != "CB") {
+        transactions.push(convertNumber(result));
+      } else if (transaction.paymentMode != "CB") {
         let result = {
-          paymentId: value.reference,
-          conduentDate: value.date,
-          conduentAmount: value.amount,
-          conduentStatus: value.conduentStatus,
-          email: value.email,
-          idgcc: value.IDGCC,
-          paymentMode: value.paymentMode,
+          paymentId: transaction.reference,
+          conduentDate: transaction.date,
+          conduentAmount: transaction.amount,
+          conduentStatus: transaction.conduentStatus,
+          email: transaction.email,
+          idgcc: transaction.IDGCC,
+          paymentMode: transaction.paymentMode,
           conduentCheck: "OK",
           finalResult: "OK"
         }
-        transactions.push(result);
+        transactions.push(convertNumber(result));
       }
-    }
+    })
 
 
 
-    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), build_internal(transactions));
+    fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), '\uFEFF' + build_internal(transactions), { encoding: 'utf8' });
 
     return zipFile
   } catch (error) {
     console.error('Error filtering successful payments:', error);
   }
+}
+
+function convertNumber(transaction) {
+  if (transaction.conduentAmount) {
+    transaction.conduentAmount = transaction.conduentAmount.toString().replace('.', ',');
+  }
+  if (transaction.moneticoAmount) {
+    transaction.moneticoAmount = transaction.moneticoAmount.toString().replace('.', ',');
+  }
+  return transaction;
 }
 
 function build_csv(transactions, headers_labels, orderedAttributes) {
@@ -473,12 +483,6 @@ function build_csv(transactions, headers_labels, orderedAttributes) {
 
 function build_internal(transactions) {
   const result = build_csv(transactions, csv_format.internal.headers_labels, csv_format.internal.orderedAttributes);
-  return result
-
-}
-
-function build_stats(usecases) {
-  const result = build_csv(usecases, csv_format.stats.headers_labels, csv_format.stats.orderedAttributes);
   return result
 
 }
