@@ -248,7 +248,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             moneticoStatus: item_monetico.status,
             isRefund: false,
             moneticoCheck: "OK",
-            finalResult: "OK"
           };
 
 
@@ -272,7 +271,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
               result.idgcc = conduentMatch.IDGCC;
               result.paymentMode = conduentMatch.paymentMode;
               result.conduentCheck = "Mauvais Statut";
-              result.finalResult = "KO";
             }
             remaining_results_conduent = remaining_results_conduent.filter(item => item.reference != item_monetico.paymentId);
           } else {
@@ -283,7 +281,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             result.idgcc = "Conduent Not Found";
             result.paymentMode = "Conduent Not Found";
             result.conduentCheck = "Commande introuvable";
-            result.finalResult = "KO";
           }
 
 
@@ -297,12 +294,10 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             } else {
               result.headerStatus = headerMatch.status;
               result.isCheck = "Mauvais Statut";
-              result.finalResult = "KO";
             }
           } else {
             result.headerStatus = "IS Not Found";
             result.isCheck = "Commande introuvable";
-            result.finalResult = "KO";
           }
 
 
@@ -313,7 +308,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             result.supportId = basketMatch.supportId;
           } else {
             result.supportId = "IS Not Found";
-            result.finalResult = "KO";
           }
 
           //Récupération des données du product
@@ -323,7 +317,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
           } else {
             result.isRegul = "IS Not Found";
-            result.finalResult = "KO";
           }
 
           transactions.push(convertNumber(result));
@@ -335,7 +328,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           const foundTransaction = transactions.find(item => ((item.orderId == item_monetico.orderId) && (item.paymentId != item_monetico.paymentId)));
           if (foundTransaction) {
             foundTransaction.isRefund = true;
-            foundTransaction.finalResult = "OK";
             foundTransaction.isCheck = "OK";
           }
         } catch (error) {
@@ -355,8 +347,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           idgcc: transaction.IDGCC,
           paymentMode: transaction.paymentMode,
           isRefund: false,
-          conduentCheck: "OK",
-          finalResult: "OK"
+          conduentCheck: "OK"
         }
 
         //Récupération des données Monetico
@@ -367,15 +358,13 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           result.moneticoDate = resultMoneticoFound.date;
           result.moneticoAmount = resultMoneticoFound.amount;
           result.moneticoStatus = resultMoneticoFound.status,
-            result.moneticoCheck = "Mauvais Statut";
-          result.finalResult = "KO";
+          result.moneticoCheck = "Mauvais Statut";
         } else {
           result.orderId = "Monetico Not Found";
           result.moneticoDate = "Monetico Not Found";
           result.moneticoAmount = "Monetico Not Found";
           result.moneticoStatus = "Monetico Not Found";
           result.moneticoCheck = "Commande introuvable";
-          result.finalResult = "KO";
         }
 
         //Récupération des données du Payment
@@ -392,7 +381,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
         //init
         result.headerStatus = "IS Not Found";
         result.isCheck = "Commande introuvable";
-        result.finalResult = "KO";
 
         if (foundOrderId != null) {
           const headerMatch = headerMap.get(foundOrderId);
@@ -403,7 +391,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
             } else {
               result.headerStatus = headerMatch.status;
               result.isCheck = "Mauvais Statut";
-              result.finalResult = "KO";
             }
 
 
@@ -414,7 +401,6 @@ function build_extract(results_headers, results_monetico, results_conduent) {
               result.supportId = basketMatch.supportId;
             } else {
               result.supportId = "IS Not Found";
-              result.finalResult = "KO";
             }
 
             //Récupération des données du product
@@ -424,13 +410,11 @@ function build_extract(results_headers, results_monetico, results_conduent) {
               result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
             } else {
               result.isRegul = "IS Not Found";
-              result.finalResult = "KO";
             }
 
           } else {
             result.headerStatus = "IS Not Found";
             result.isCheck = "Commande introuvable";
-            result.finalResult = "KO";
           }
         }
 
@@ -444,14 +428,37 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           email: transaction.email,
           idgcc: transaction.IDGCC,
           paymentMode: transaction.paymentMode,
-          conduentCheck: "OK",
-          finalResult: "OK"
+          conduentCheck: "OK"
         }
         transactions.push(convertNumber(result));
       }
     })
 
-
+    transactions.map(transaction=>{
+      if (transaction.moneticoCheck=="OK"){
+        if (transaction.conduentCheck == "OK") {
+          transaction.finalResult = "OK - Produit distribué et payé par CB";
+        }else if (transaction.conduentCheck == "Mauvais Statut") {
+          transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
+        }else if (transaction.conduentCheck == "Commande introuvable") {
+          transaction.finalResult = "KO - Produit payé par CB mais commande introuvable";
+        }
+      }else if (transaction.moneticoCheck == "Mauvais Statut") {
+        if (transaction.conduentCheck == "OK") {
+          transaction.finalResult = "KO - Produit distribué mais pas payé";
+        } else if (transaction.conduentCheck == "Mauvais Statut") {
+          transaction.finalResult = "OK - Produit pas distribué et pas payé";
+        } else if (transaction.conduentCheck == "Commande introuvable") {
+          transaction.finalResult = "OK - Produit pas payé et commande introuvable";
+        }
+      }else{
+        if ((transaction.paymentMode=="Autre")&&(transaction.conduentCheck == "OK")) {
+          transaction.finalResult = "OK - Produit distribué et payé par SEPA";
+        }else{
+          transaction.finalResult = "KO";
+        }
+      }
+    })
 
     fs.writeFileSync(path.join(__dirname, 'outputs', zipFile[0]), '\uFEFF' + build_internal(transactions), { encoding: 'utf8' });
 
