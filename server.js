@@ -30,8 +30,12 @@ let results_payments = [];
 let results_products = [];
 let results_monetico_retail_remisees = [];
 let results_monetico_retail_encours = [];
+let results_monetico_retail_remisees_selected = [];
+let results_monetico_retail_encours_selected = [];
 let results_monetico = [];
+let results_monetico_selected = [];
 let results_conduent = [];
+let results_conduent_selected = [];
 let checkPointMap;
 let headerMap;
 let conduentMap;
@@ -197,7 +201,7 @@ async function process_conduent(conduentFile) {
   })
 }
 
-function build_extract(results_headers, results_monetico, results_conduent) {
+function build_extract(results_headers, results_monetico, results_monetico_selected, results_conduent, results_conduent_selected) {
   try {
     let zipFile = [
       'transactions_nouveaux_rapport.csv'
@@ -212,8 +216,8 @@ function build_extract(results_headers, results_monetico, results_conduent) {
     let count = 1;
     let checkPoints = [];
 
-    results_monetico_filtered = results_monetico.filter(item => moneticoPaidStatuses.includes(item.status));
-    let remaining_results_conduent = results_conduent.filter(item => conduentValidatedStatuses.includes(item.conduentStatus));
+    results_monetico_filtered = results_monetico_selected.filter(item => moneticoPaidStatuses.includes(item.status));
+    let remaining_results_conduent = results_conduent_selected.filter(item => conduentValidatedStatuses.includes(item.conduentStatus));
 
     while (count * percentStep < 100) {
       let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
@@ -358,7 +362,7 @@ function build_extract(results_headers, results_monetico, results_conduent) {
           result.moneticoDate = resultMoneticoFound.date;
           result.moneticoAmount = resultMoneticoFound.amount;
           result.moneticoStatus = resultMoneticoFound.status,
-          result.moneticoCheck = "Mauvais Statut";
+            result.moneticoCheck = "Mauvais Statut";
         } else {
           result.orderId = "Monetico Not Found";
           result.moneticoDate = "Monetico Not Found";
@@ -434,16 +438,16 @@ function build_extract(results_headers, results_monetico, results_conduent) {
       }
     })
 
-    transactions.map(transaction=>{
-      if (transaction.moneticoCheck=="OK"){
+    transactions.map(transaction => {
+      if (transaction.moneticoCheck == "OK") {
         if (transaction.conduentCheck == "OK") {
           transaction.finalResult = "OK - Produit distribué et payé par CB";
-        }else if (transaction.conduentCheck == "Mauvais Statut") {
+        } else if (transaction.conduentCheck == "Mauvais Statut") {
           transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
-        }else if (transaction.conduentCheck == "Commande introuvable") {
+        } else if (transaction.conduentCheck == "Commande introuvable") {
           transaction.finalResult = "KO - Produit payé par CB mais commande introuvable";
         }
-      }else if (transaction.moneticoCheck == "Mauvais Statut") {
+      } else if (transaction.moneticoCheck == "Mauvais Statut") {
         if (transaction.conduentCheck == "OK") {
           transaction.finalResult = "KO - Produit distribué mais pas payé";
         } else if (transaction.conduentCheck == "Mauvais Statut") {
@@ -451,10 +455,10 @@ function build_extract(results_headers, results_monetico, results_conduent) {
         } else if (transaction.conduentCheck == "Commande introuvable") {
           transaction.finalResult = "OK - Produit pas payé et commande introuvable";
         }
-      }else{
-        if ((transaction.paymentMode=="Autre")&&(transaction.conduentCheck == "OK")) {
+      } else {
+        if ((transaction.paymentMode == "Autre") && (transaction.conduentCheck == "OK")) {
           transaction.finalResult = "OK - Produit distribué et payé par SEPA";
-        }else{
+        } else {
           transaction.finalResult = "KO";
         }
       }
@@ -534,9 +538,12 @@ app.post('/uploadcsv', upload.fields([
 
       results_monetico_retail_remisees.splice(0, 1);
       results_monetico_retail_encours.splice(0, 1);
+      results_conduent.splice(0, 1);
+
+
 
       if (requestedstartPaymentDate != null || requestedendPaymentDate != null) {
-        results_monetico_retail_encours = results_monetico_retail_encours.filter((item) => {
+        results_monetico_retail_encours_selected = results_monetico_retail_encours.filter((item) => {
           let isValid = true;
 
           // Then filter by requestedstartPaymentDate
@@ -551,22 +558,59 @@ app.post('/uploadcsv', upload.fields([
 
           return isValid;
         });
+
+        results_monetico_retail_remisees_selected = results_monetico_retail_remisees.filter((item) => {
+          let isValid = true;
+
+          // Then filter by requestedstartPaymentDate
+          if (requestedstartPaymentDate != null) {
+            isValid = isValid && item.date > requestedstartPaymentDate + ' 00:00:00';
+          }
+
+          // Then filter by requestedendPaymentDate
+          if (requestedendPaymentDate != null) {
+            isValid = isValid && item.date <= requestedendPaymentDate + ' 00:00:00';
+          }
+
+          return isValid;
+        });
+
+        results_conduent_selected = results_conduent.filter((item) => {
+          let isValid = true;
+
+          // Then filter by requestedstartPaymentDate
+          if (requestedstartPaymentDate != null) {
+            isValid = isValid && item.date > requestedstartPaymentDate + ' 00:00:00';
+          } else {//Filtre des transactions Conduent à partir du 30/06/2025 13:27:00
+            isValid = isValid && item.date > requestedstartPaymentDate + '2025-06-30 13:27:00';
+          }
+
+          // Then filter by requestedendPaymentDate
+          if (requestedendPaymentDate != null) {
+            isValid = isValid && item.date < requestedendPaymentDate + ' 00:00:00';
+          }
+
+          return isValid;
+        });
+
       }
+
+      console.log("Transactions Monetico Remisées: " + results_monetico_retail_remisees.length + " --> " + results_monetico_retail_remisees_selected.length);
+      console.log("Fichier initial de Monetico Encours: " + results_monetico_retail_encours.length + " --> " + results_monetico_retail_encours_selected.length);
+      console.log("Fichier initial de Conduent: " + results_conduent.length + " --> " + results_conduent_selected.length);
 
       results_monetico = [
         ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
         ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
+      results_monetico_selected = [
+        ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+      ];
 
-      results_conduent.splice(0, 1);
 
-      //Filtre des transactions Conduent à partir du 30/06/2025 13:27:00
-      console.log(results_conduent.length);
-      results_conduent = results_conduent.filter((item) => item.date > '2025-06-30 13:27:00');
-      console.log(results_conduent.length);
-
-      const zipFile = build_extract(results_headers, results_monetico, results_conduent);
+      const zipFile = build_extract(results_headers, results_monetico, results_monetico_selected, results_conduent, results_conduent_selected);
 
       const archive = archiver('zip', {
         zlib: { level: 9 }, // Compression level (9 is the maximum)
