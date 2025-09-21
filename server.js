@@ -135,13 +135,13 @@ async function process_products(productFile) {
 async function process_monetico_retail_remisees(moneticoRemiseesFile) {
   return new Promise((resolve, reject) => {
     fs.createReadStream(moneticoRemiseesFile.path)
-      .pipe(csv({ headers: ['orderId', 'type', 'amount', , 'date', , , , , , , 'paymentId'], separator: ';' }))
+      .pipe(csv({ headers: ['orderId', 'type', 'amount', , 'date', , , , , , 'moneticoEmail', 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, type, paymentId } = data;
+        const { orderId, type, paymentId, moneticoEmail } = data;
         const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount);
-        results_monetico_retail_remisees.push({ orderId, amount, type, date, paymentId });
+        results_monetico_retail_remisees.push({ orderId, amount, type, date, paymentId, moneticoEmail });
       })
       .on('end', () => {
         console.log(`Fichier monetico_remisees traité avec succès`);
@@ -158,13 +158,13 @@ async function process_monetico_retail_remisees(moneticoRemiseesFile) {
 async function process_monetico_retail_encours(moneticoEncoursFile) {
   return new Promise((resolve, reject) => {
     fs.createReadStream(moneticoEncoursFile.path)
-      .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , 'type', , , , , , 'paymentId'], separator: ';' }))
+      .pipe(csv({ headers: ['orderId', 'amount', 'status', 'date', , , , , , 'type', , , , , 'moneticoEmail', 'paymentId'], separator: ';' }))
       .on('data', (data) => {
 
-        const { orderId, status, paymentId, type } = data;
+        const { orderId, status, paymentId, type, moneticoEmail } = data;
         const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
         const amount = parseFloat(data.amount);
-        results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId, type });
+        results_monetico_retail_encours.push({ orderId, amount, status, date, paymentId, type, moneticoEmail });
       })
       .on('end', () => {
         console.log(`Fichier monetico_encours traité avec succès`);
@@ -219,11 +219,11 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
     results_monetico_filtered = results_monetico_selected.filter(item => moneticoPaidStatuses.includes(item.status));
     let remaining_results_conduent = results_conduent_selected.filter(item => conduentValidatedStatuses.includes(item.conduentStatus));
 
-    while (count * percentStep < 100) {
-      let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
-      checkPoints.push({ percent: count * percentStep, paymentRef: results_monetico_filtered[index].paymentId });
-      count++;
-    }
+     while (count * percentStep < 100) {
+       let index = Math.floor(count * percentStep * results_monetico_filtered.length / 100);
+       checkPoints.push({ percent: count * percentStep, paymentRef: results_monetico_filtered[index].paymentId });
+       count++;
+     }
 
     checkPointMap = new Map(checkPoints.map((item) => [item.paymentRef, item.percent]));
     headerMap = new Map(results_headers.map((item) => [item.orderId, item]));
@@ -250,6 +250,7 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
             moneticoDate: item_monetico.date,
             moneticoAmount: item_monetico.amount,
             moneticoStatus: item_monetico.status,
+            moneticoEmail: item_monetico.moneticoEmail,
             isRefund: false,
             moneticoCheck: "OK",
           };
@@ -361,13 +362,15 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
           result.orderId = resultMoneticoFound.orderId;
           result.moneticoDate = resultMoneticoFound.date;
           result.moneticoAmount = resultMoneticoFound.amount;
-          result.moneticoStatus = resultMoneticoFound.status,
-            result.moneticoCheck = "Mauvais Statut";
+          result.moneticoStatus = resultMoneticoFound.status;
+          result.moneticoEmail = resultMoneticoFound.moneticoEmail;
+          result.moneticoCheck = "Mauvais Statut";
         } else {
           result.orderId = "Monetico Not Found";
           result.moneticoDate = "Monetico Not Found";
           result.moneticoAmount = "Monetico Not Found";
           result.moneticoStatus = "Monetico Not Found";
+          result.moneticoEmail = "Monetico Not Found";
           result.moneticoCheck = "Commande introuvable";
         }
 
@@ -600,13 +603,13 @@ app.post('/uploadcsv', upload.fields([
       console.log("Fichier initial de Conduent: " + results_conduent.length + " --> " + results_conduent_selected.length);
 
       results_monetico = [
-        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
-        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
       results_monetico_selected = [
-        ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
-        ...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
 
