@@ -189,10 +189,12 @@ async function process_conduent(conduentFile) {
       .pipe(csv({ headers: [, 'reference', 'conduentStatus', 'date', 'amount', 'paymentMode', 'userCode', 'email', , , 'IDGCC'], separator: ';' }))
       .on('data', (data) => {
 
-        const { reference, conduentStatus, userCode, paymentMode, email, IDGCC } = data;
-        const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
-        const amount = parseFloat(data.amount) / 100;
-        results_conduent.push({ reference, conduentStatus, date, amount, userCode, paymentMode, email, IDGCC });
+        if (results_conduent.find(item => item.reference === data.reference) == undefined) {
+          const { reference, conduentStatus, userCode, paymentMode, email, IDGCC } = data;
+          const date = data.date.substring(6, 10) + "-" + data.date.substring(3, 5) + "-" + data.date.substring(0, 2) + data.date.substring(10);
+          const amount = parseFloat(data.amount) / 100;
+          results_conduent.push({ reference, conduentStatus, date, amount, userCode, paymentMode, email, IDGCC });
+        }
       })
       .on('end', () => {
         console.log(`Fichier conduent traité avec succès`);
@@ -310,6 +312,7 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
         if (foundOrderId != null) {
           const headerMatch = headerMap.get(foundOrderId);
           if (headerMatch != undefined) {
+            result.orderId = headerMatch.orderId;
             if (headerValidatedStatuses.includes(headerMatch.status)) {
               result.headerStatus = headerMatch.status;
               result.isCheck = "OK";
@@ -360,27 +363,53 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
     })
 
     transactions.map(transaction => {
-      if (transaction.moneticoCheck == "OK") {
-        if (transaction.conduentCheck == "OK") {
-          transaction.finalResult = "OK - Produit distribué et payé par CB";
-        } else if (transaction.conduentCheck == "Mauvais Statut") {
-          transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
-        } else if (transaction.conduentCheck == "Commande introuvable") {
-          transaction.finalResult = "KO - Produit payé par CB mais commande introuvable";
-        }
-      } else if (transaction.moneticoCheck == "Mauvais Statut") {
-        if (transaction.conduentCheck == "OK") {
-          transaction.finalResult = "KO - Produit distribué mais pas payé";
-        } else if (transaction.conduentCheck == "Mauvais Statut") {
-          transaction.finalResult = "OK - Produit pas distribué et pas payé";
-        } else if (transaction.conduentCheck == "Commande introuvable") {
-          transaction.finalResult = "OK - Produit pas payé et commande introuvable";
+      if (transaction.isRefund == false) {
+        if (transaction.moneticoCheck == "OK") {
+          if (transaction.conduentCheck == "OK") {
+            transaction.finalResult = "OK - Produit distribué et payé par CB";
+          } else if (transaction.conduentCheck == "Mauvais Statut") {
+            transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
+          } else if (transaction.conduentCheck == "Commande introuvable") {
+            transaction.finalResult = "KO - Produit payé par CB mais commande introuvable";
+          }
+        } else if (transaction.moneticoCheck == "Mauvais Statut") {
+          if (transaction.conduentCheck == "OK") {
+            transaction.finalResult = "KO - Produit distribué mais pas payé";
+          } else if (transaction.conduentCheck == "Mauvais Statut") {
+            transaction.finalResult = "OK - Produit pas distribué et pas payé";
+          } else if (transaction.conduentCheck == "Commande introuvable") {
+            transaction.finalResult = "OK - Produit pas payé et commande introuvable";
+          }
+        } else {
+          if ((transaction.paymentMode == "Autre") && (transaction.conduentCheck == "OK")) {
+            transaction.finalResult = "OK - Produit distribué et payé par SEPA";
+          } else {
+            transaction.finalResult = "KO - Produit distribué mais pas payé";
+          }
         }
       } else {
-        if ((transaction.paymentMode == "Autre") && (transaction.conduentCheck == "OK")) {
-          transaction.finalResult = "OK - Produit distribué et payé par SEPA";
+        if (transaction.moneticoCheck == "OK") {
+          if (transaction.conduentCheck == "OK") {
+            transaction.finalResult = "KO - Paiement remboursé mais produit distribué quand même";
+          } else if (transaction.conduentCheck == "Mauvais Statut") {
+            transaction.finalResult = "OK - Paiement remboursé et produit non distribué";
+          } else if (transaction.conduentCheck == "Commande introuvable") {
+            transaction.finalResult = "OK - Paiement remboursé et pas de commande";
+          }
+        } else if (transaction.moneticoCheck == "Mauvais Statut") {
+          if (transaction.conduentCheck == "OK") {
+            transaction.finalResult = "KO - Produit distribué mais pas payé";
+          } else if (transaction.conduentCheck == "Mauvais Statut") {
+            transaction.finalResult = "OK - Produit pas distribué et pas payé";
+          } else if (transaction.conduentCheck == "Commande introuvable") {
+            transaction.finalResult = "OK - Produit pas payé et commande introuvable";
+          }
         } else {
-          transaction.finalResult = "KO";
+          if ((transaction.paymentMode == "Autre") && (transaction.conduentCheck == "OK")) {
+            transaction.finalResult = "OK - Produit distribué et payé par SEPA";
+          } else {
+            transaction.finalResult = "KO - Produit distribué mais pas payé";
+          }
         }
       }
     })
@@ -404,143 +433,81 @@ function checkSources(type, item_monetico) {
     moneticoCheck: "OK",
   };
 
-  if (type == "debit") {
-    result.isRefund = false;
-    //Récupération des données Conduent
-    const conduentMatch = conduentMap.get(item_monetico.paymentId);
+  //Récupération des données Conduent
+  const conduentMatch = conduentMap.get(item_monetico.paymentId);
 
-    if (conduentMatch != undefined) {
-      if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
-        result.conduentAmount = conduentMatch.amount;
-        result.conduentDate = conduentMatch.date;
-        result.conduentStatus = conduentMatch.conduentStatus;
-        result.email = conduentMatch.email;
-        result.idgcc = conduentMatch.IDGCC;
-        result.paymentMode = conduentMatch.paymentMode;
-        result.conduentCheck = "OK";
-      } else {
-        result.conduentAmount = conduentMatch.amount;
-        result.conduentDate = conduentMatch.date;
-        result.conduentStatus = conduentMatch.conduentStatus;
-        result.email = conduentMatch.email;
-        result.idgcc = conduentMatch.IDGCC;
-        result.paymentMode = conduentMatch.paymentMode;
-        result.conduentCheck = "Mauvais Statut";
-      }
-      remaining_results_conduent = remaining_results_conduent.filter(item => item.reference != item_monetico.paymentId);
-    } else {
-      result.conduentAmount = "Conduent Not Found";
-      result.conduentDate = "Conduent Not Found";
-      result.conduentStatus = "Conduent Not Found";
-      result.email = "Conduent Not Found";
-      result.idgcc = "Conduent Not Found";
-      result.paymentMode = "Conduent Not Found";
-      result.conduentCheck = "Commande introuvable";
-    }
-
-
-    //Récupération des données du Header
-    const headerMatch = headerMap.get(item_monetico.orderId);
-
-    if (headerMatch != undefined) {
-      if (headerValidatedStatuses.includes(headerMatch.status)) {
-        result.headerStatus = headerMatch.status;
-        result.isCheck = "OK";
-      } else {
-        result.headerStatus = headerMatch.status;
-        result.isCheck = "Mauvais Statut";
-      }
-    } else {
-      result.headerStatus = "IS Not Found";
-      result.isCheck = "Commande introuvable";
-    }
-
-
-    //Récupération des données du basket
-    const basketMatch = basketMap.get(item_monetico.orderId);
-
-    if (basketMatch != undefined) {
-      result.supportId = basketMatch.supportId;
-    } else {
-      result.supportId = "IS Not Found";
-    }
-
-    //Récupération des données du product
-    const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
-
-    if (productMatch.length > 0) {
-      result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
-    } else {
-      result.isRegul = "IS Not Found";
-    }
-
-    transactions.push(convertNumber(result));
-  } else if (type == "credit") {
-    result.isRefund=true;
-
-    //Récupération des données Conduent
-    const conduentMatch = conduentMap.get(item_monetico.paymentId);
-
-    if (conduentMatch != undefined) {
-      if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
-        result.conduentAmount = conduentMatch.amount;
-        result.conduentDate = conduentMatch.date;
-        result.conduentStatus = conduentMatch.conduentStatus;
-        result.email = conduentMatch.email;
-        result.idgcc = conduentMatch.IDGCC;
-        result.paymentMode = conduentMatch.paymentMode;
-        result.conduentCheck = "Mauvais Statut";
-      } else {
-        result.conduentAmount = conduentMatch.amount;
-        result.conduentDate = conduentMatch.date;
-        result.conduentStatus = conduentMatch.conduentStatus;
-        result.email = conduentMatch.email;
-        result.idgcc = conduentMatch.IDGCC;
-        result.paymentMode = conduentMatch.paymentMode;
-        result.conduentCheck = "OK";
-      }
-      remaining_results_conduent = remaining_results_conduent.filter(item => item.reference != item_monetico.paymentId);
-    } else {
-      result.conduentAmount = "Conduent Not Found";
-      result.conduentDate = "Conduent Not Found";
-      result.conduentStatus = "Conduent Not Found";
-      result.email = "Conduent Not Found";
-      result.idgcc = "Conduent Not Found";
-      result.paymentMode = "Conduent Not Found";
+  if (conduentMatch != undefined) {
+    if (conduentValidatedStatuses.includes(conduentMatch.conduentStatus)) {
+      result.conduentAmount = conduentMatch.amount;
+      result.conduentDate = conduentMatch.date;
+      result.conduentStatus = conduentMatch.conduentStatus;
+      result.email = conduentMatch.email;
+      result.idgcc = conduentMatch.IDGCC;
+      result.paymentMode = conduentMatch.paymentMode;
       result.conduentCheck = "OK";
+    } else {
+      result.conduentAmount = conduentMatch.amount;
+      result.conduentDate = conduentMatch.date;
+      result.conduentStatus = conduentMatch.conduentStatus;
+      result.email = conduentMatch.email;
+      result.idgcc = conduentMatch.IDGCC;
+      result.paymentMode = conduentMatch.paymentMode;
+      result.conduentCheck = "Mauvais Statut";
     }
+    remaining_results_conduent = remaining_results_conduent.filter(item => item.reference != item_monetico.paymentId);
+  } else {
+    result.conduentAmount = "Conduent Not Found";
+    result.conduentDate = "Conduent Not Found";
+    result.conduentStatus = "Conduent Not Found";
+    result.email = "Conduent Not Found";
+    result.idgcc = "Conduent Not Found";
+    result.paymentMode = "Conduent Not Found";
+    result.conduentCheck = "Commande introuvable";
+  }
 
 
-    //Récupération des données du Header
-    const headerMatch = headerMap.get(item_monetico.orderId);
+  //Récupération des données du Header
+  const headerMatch = headerMap.get(item_monetico.orderId);
 
-    if (headerMatch != undefined) {
+  if (headerMatch != undefined) {
+    if (headerValidatedStatuses.includes(headerMatch.status)) {
       result.headerStatus = headerMatch.status;
       result.isCheck = "OK";
     } else {
-      result.headerStatus = "IS Not Found";
-      result.isCheck = "OK";
+      result.headerStatus = headerMatch.status;
+      result.isCheck = "Mauvais Statut";
     }
+  } else {
+    result.headerStatus = "IS Not Found";
+    result.isCheck = "Commande introuvable";
+  }
 
 
-    //Récupération des données du basket
-    const basketMatch = basketMap.get(item_monetico.orderId);
+  //Récupération des données du basket
+  const basketMatch = basketMap.get(item_monetico.orderId);
 
-    if (basketMatch != undefined) {
-      result.supportId = basketMatch.supportId;
-    } else {
-      result.supportId = "IS Not Found";
-    }
+  if (basketMatch != undefined) {
+    result.supportId = basketMatch.supportId;
+  } else {
+    result.supportId = "IS Not Found";
+  }
 
-    //Récupération des données du product
-    const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
+  //Récupération des données du product
+  const productMatch = Object.assign([], results_products.filter((item) => item.orderId == item_monetico.orderId));
 
-    if (productMatch.length > 0) {
-      result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
-    } else {
-      result.isRegul = "IS Not Found";
-    }
-    transactions.push(convertNumber(result));
+  if (productMatch.length > 0) {
+    result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
+  } else {
+    result.isRegul = "IS Not Found";
+  }
+
+  transactions.push(convertNumber(result));
+
+  if (type == "debit") {
+    result.isRefund = false;
+
+  } else if (type == "credit") {
+    result.isRefund = true;
   }
 }
 
@@ -597,7 +564,7 @@ app.post('/uploadcsv', upload.fields([
 
 
 
-  if (headerFile != null && moneticoRemiseesFile != null && moneticoEncoursFile != null && conduentFile != null) {
+  if (headerFile != null && moneticoRemiseesFile != null && conduentFile != null) {
 
     try {
       await process_headers(headerFile);
@@ -605,17 +572,17 @@ app.post('/uploadcsv', upload.fields([
       await process_payments(paymentFile);
       await process_products(productFile);
       await process_monetico_retail_remisees(moneticoRemiseesFile);
-      await process_monetico_retail_encours(moneticoEncoursFile);
+      //await process_monetico_retail_encours(moneticoEncoursFile);
       await process_conduent(conduentFile, results_conduent);
 
       results_monetico_retail_remisees.splice(0, 1);
-      results_monetico_retail_encours.splice(0, 1);
+      //results_monetico_retail_encours.splice(0, 1);
       results_conduent.splice(0, 1);
 
 
 
       if (requestedstartPaymentDate != null || requestedendPaymentDate != null) {
-        results_monetico_retail_encours_selected = results_monetico_retail_encours.filter((item) => {
+        /*results_monetico_retail_encours_selected = results_monetico_retail_encours.filter((item) => {
           let isValid = true;
 
           // Then filter by requestedstartPaymentDate
@@ -628,8 +595,12 @@ app.post('/uploadcsv', upload.fields([
             isValid = isValid && item.date < requestedendPaymentDate + ' 00:00:00';
           }
 
+          if (results_monetico_retail_remisees.find(item2 => item2.paymentId == item.paymentId)) {
+            isValid = false
+          }
+
           return isValid;
-        });
+        });*/
 
         results_monetico_retail_remisees_selected = results_monetico_retail_remisees.filter((item) => {
           let isValid = true;
@@ -668,17 +639,17 @@ app.post('/uploadcsv', upload.fields([
       }
 
       console.log("Transactions Monetico Remisées: " + results_monetico_retail_remisees.length + " --> " + results_monetico_retail_remisees_selected.length);
-      console.log("Fichier initial de Monetico Encours: " + results_monetico_retail_encours.length + " --> " + results_monetico_retail_encours_selected.length);
+      //console.log("Fichier initial de Monetico Encours: " + results_monetico_retail_encours.length + " --> " + results_monetico_retail_encours_selected.length);
       console.log("Fichier initial de Conduent: " + results_conduent.length + " --> " + results_conduent_selected.length);
 
       results_monetico = [
-        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
-        ...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_remisees.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type }))
+        //...results_monetico_retail_encours.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
       results_monetico_selected = [
-        ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
-        ...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
+        ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type }))
+        //...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
 
