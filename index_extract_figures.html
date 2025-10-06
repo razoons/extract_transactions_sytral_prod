@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razoon Tool -Extraction des transactions Sytral</title>
+</head>
+
+<body>
+    <h1>Extraction des figures</h1>
+    <form action="/uploadcsv" method="post" enctype="multipart/form-data">
+        <h3>CSV transactions(;)</h3>
+        <input type="file" name="file_transactions" id="file_transactions" accept=".csv">
+        <input type="text" name="date" id="date" placeholder="Date (aaaa-mm-dd)">
+        <button type="submit">Soumettre</button>
+    </form>
+</body>
+
+</html>
