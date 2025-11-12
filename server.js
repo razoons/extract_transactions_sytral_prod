@@ -366,7 +366,11 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
       if (transaction.isRefund == false) {
         if (transaction.moneticoCheck == "OK") {
           if (transaction.conduentCheck == "OK") {
-            transaction.finalResult = "OK - Produit distribué et payé par CB";
+            if (transaction.moneticoAmount == transaction.conduentAmount) {
+              transaction.finalResult = "OK - Produit distribué et payé par CB";
+            } else {
+              transaction.finalResult = "KO - Produit distribué et payé par CB mais montants différents";
+            }
           } else if (transaction.conduentCheck == "Mauvais Statut") {
             transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
           } else if (transaction.conduentCheck == "Commande introuvable") {
