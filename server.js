@@ -31,7 +31,6 @@ let results_products = [];
 let results_monetico_retail_remisees = [];
 let results_monetico_retail_encours = [];
 let results_monetico_retail_remisees_selected = [];
-let results_monetico_retail_encours_selected = [];
 let results_monetico = [];
 let results_monetico_selected = [];
 let results_conduent = [];
@@ -336,9 +335,13 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
 
             if (productMatch.length > 0) {
               result.isRegul = productMatch.filter(product => product.productId == "conduent:scheduledpaymentregularisation").length > 0 ? true : false;
+
+
             } else {
               result.isRegul = "IS Not Found";
             }
+            const sumProductsAmount = productMatch.reduce((sum, product) => sum + product.productTotalAmountWithTax, 0);
+            result.sumProductsAmount = sumProductsAmount;
 
           } else {
             result.headerStatus = "IS Not Found";
@@ -356,7 +359,8 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
           email: transaction.email,
           idgcc: transaction.IDGCC,
           paymentMode: transaction.paymentMode,
-          conduentCheck: "OK"
+          conduentCheck: "OK",
+          totalProductAmount: 0, // Default for non-CB transactions or if not found
         }
         transactions.push(convertNumber(result));
       }
@@ -369,7 +373,11 @@ function build_extract(results_headers, results_monetico, results_monetico_selec
             if (transaction.moneticoAmount == transaction.conduentAmount) {
               transaction.finalResult = "OK - Produit distribué et payé par CB";
             } else {
-              transaction.finalResult = "KO - Produit distribué et payé par CB mais montants différents";
+              if (transaction.sumProductsAmount == transaction.moneticoAmount){
+                transaction.finalResult = "KO - Produit distribué et payé par CB mais somme des paniers différente de Monetico";
+              }else{
+                transaction.finalResult = "KO - Produit distribué et payé par CB mais les paniers IS et Conduent diffèrent";
+              }
             }
           } else if (transaction.conduentCheck == "Mauvais Statut") {
             transaction.finalResult = "KO - Produit payé par CB mais pas distribué";
@@ -505,6 +513,9 @@ function checkSources(type, item_monetico) {
     result.isRegul = "IS Not Found";
   }
 
+  const sumProductsAmount = productMatch.reduce((sum, product) => sum + product.productTotalAmountWithTax, 0);
+  result.sumProductsAmount = sumProductsAmount;
+
   transactions.push(convertNumber(result));
 
   if (type == "debit") {
@@ -521,6 +532,12 @@ function convertNumber(transaction) {
   }
   if (transaction.moneticoAmount) {
     transaction.moneticoAmount = transaction.moneticoAmount.toString().replace('.', ',');
+  }
+  if (transaction.totalProductAmount) {
+    transaction.totalProductAmount = transaction.totalProductAmount.toString().replace('.', ',');
+  }
+  if (transaction.sumProductsAmount) {
+    transaction.sumProductsAmount = transaction.sumProductsAmount.toString().replace('.', ',');
   }
   return transaction;
 }
@@ -586,25 +603,6 @@ app.post('/uploadcsv', upload.fields([
 
 
       if (requestedstartPaymentDate != null || requestedendPaymentDate != null) {
-        /*results_monetico_retail_encours_selected = results_monetico_retail_encours.filter((item) => {
-          let isValid = true;
-
-          // Then filter by requestedstartPaymentDate
-          if (requestedstartPaymentDate != null) {
-            isValid = isValid && item.date > requestedstartPaymentDate + ' 00:00:00';
-          }
-
-          // Then filter by requestedendPaymentDate
-          if (requestedendPaymentDate != null) {
-            isValid = isValid && item.date < requestedendPaymentDate + ' 00:00:00';
-          }
-
-          if (results_monetico_retail_remisees.find(item2 => item2.paymentId == item.paymentId)) {
-            isValid = false
-          }
-
-          return isValid;
-        });*/
 
         results_monetico_retail_remisees_selected = results_monetico_retail_remisees.filter((item) => {
           let isValid = true;
@@ -643,7 +641,7 @@ app.post('/uploadcsv', upload.fields([
       }
 
       console.log("Transactions Monetico Remisées: " + results_monetico_retail_remisees.length + " --> " + results_monetico_retail_remisees_selected.length);
-      //console.log("Fichier initial de Monetico Encours: " + results_monetico_retail_encours.length + " --> " + results_monetico_retail_encours_selected.length);
+
       console.log("Fichier initial de Conduent: " + results_conduent.length + " --> " + results_conduent_selected.length);
 
       results_monetico = [
@@ -653,7 +651,6 @@ app.post('/uploadcsv', upload.fields([
 
       results_monetico_selected = [
         ...results_monetico_retail_remisees_selected.map(item => ({ orderId: item.orderId, status: 'Remisée', moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type }))
-        //...results_monetico_retail_encours_selected.map(item => ({ orderId: item.orderId, status: item.status, moneticoEmail: item.moneticoEmail, amount: item.amount, date: item.date, paymentId: item.paymentId, type: item.type })),
       ];
 
 
