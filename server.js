@@ -210,7 +210,7 @@ async function process_conduent(conduentFile) {
 function build_extract(results_headers, results_monetico, results_monetico_selected, results_conduent, results_conduent_selected) {
   try {
     let zipFile = [
-      'transactions_nouveaux_rapport.csv'
+      'transactions_nouveaux_rapport_avec_montants.csv'
     ];
 
 
